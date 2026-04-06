@@ -23,8 +23,9 @@ type FlatItem =
   | { kind: 'suite'; suite: TestSuite }
   | { kind: 'test'; test: TestCase; suite: TestSuite }
 
-const SUITE_H = 33  // px — suite header row height
-const TEST_H  = 28  // px — test row height
+const SUITE_H           = 33  // px — suite header row height (no file label)
+const SUITE_H_WITH_FILE = 46  // px — suite header row height (with file label)
+const TEST_H            = 28  // px — test row height
 
 // ─── Row components ───────────────────────────────────────────────────────────
 
@@ -54,11 +55,13 @@ function SuiteRow({ suite, collapsed, onToggle, onRun, disabled }: {
   onToggle: () => void; onRun: (e: React.MouseEvent) => void; disabled: boolean
 }) {
   const [hover, setHover] = useState(false)
+  const fileName = suite.sourceFile ? suite.sourceFile.split('/').pop() : null
+  const rowHeight = fileName ? SUITE_H_WITH_FILE : SUITE_H
   return (
     <div
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ display: 'flex', alignItems: 'center', height: SUITE_H }}
+      style={{ display: 'flex', alignItems: 'center', height: rowHeight }}
     >
       <button
         onClick={onToggle}
@@ -70,8 +73,15 @@ function SuiteRow({ suite, collapsed, onToggle, onRun, disabled }: {
       >
         <span style={{ color: '#6b7280', fontSize: 10, flexShrink: 0 }}>{collapsed ? '▶' : '▼'}</span>
         <StatusIcon status={suite.status} />
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#c4c4d4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-          {suite.name}
+        <span style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#c4c4d4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {suite.name}
+          </span>
+          {fileName && (
+            <span style={{ fontSize: 10, color: '#4b4b60', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>
+              {fileName}
+            </span>
+          )}
         </span>
         {suite.duration !== undefined && suite.status !== 'pending' && suite.status !== 'running' && (
           <span style={{ fontSize: 10, color: '#3a3a4e', flexShrink: 0, fontFamily: 'monospace' }}>
@@ -228,7 +238,13 @@ export function TestTree({ state, selected, search, view, onSelect, onSearchChan
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (i) => items[i]?.kind === 'suite' ? SUITE_H : TEST_H,
+    estimateSize: (i) => {
+      const item = items[i]
+      if (item?.kind === 'suite') {
+        return item.suite.sourceFile ? SUITE_H_WITH_FILE : SUITE_H
+      }
+      return TEST_H
+    },
     overscan: 10,
   })
 

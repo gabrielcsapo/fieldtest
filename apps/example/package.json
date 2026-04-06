@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@viewtest/core": "workspace:*",
+    "msw": "^2.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -22,5 +23,10 @@
     "@viewtest/runner": "workspace:*",
     "typescript": "^6.0.2",
     "vite": "^8.0.3"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

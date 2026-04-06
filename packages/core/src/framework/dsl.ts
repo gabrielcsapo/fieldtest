@@ -1,11 +1,15 @@
 import { nanoid } from './nanoid'
 import { store } from './store'
+import { __vtSetMockScope } from './mocks'
 import type { TestCase, TestSuite } from './types'
 
 let currentSuite: TestSuite | null = null
 let _currentSourceFile: string | null = null
 
-export function setCurrentSourceFile(file: string | null) { _currentSourceFile = file }
+export function setCurrentSourceFile(file: string | null) {
+  _currentSourceFile = file
+  __vtSetMockScope(file)
+}
 
 export function describe(name: string, fn: () => void) {
   const suite: TestSuite = {
@@ -46,6 +50,8 @@ function _addTest(name: string, fn: () => void | Promise<void>, skip: boolean) {
     assertions: [],
     snapshots: [],
     consoleLogs: [],
+    networkEntries: [],
+    mockEntries: [], // calls are populated by the runner after the test finishes
     testCoverage: null,
     fn,
   }

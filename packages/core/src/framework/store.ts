@@ -113,7 +113,7 @@ function resetSuite(s: TestSuite): TestSuite {
 }
 
 function resetTest(t: TestCase): TestCase {
-  return { ...t, status: 'pending', error: undefined, snapshots: [], assertions: [], consoleLogs: [], testCoverage: null, duration: undefined }
+  return { ...t, status: 'pending', error: undefined, snapshots: [], assertions: [], consoleLogs: [], networkEntries: [], mockEntries: [], testCoverage: null, duration: undefined }
 }
 
 export const store = new Store()

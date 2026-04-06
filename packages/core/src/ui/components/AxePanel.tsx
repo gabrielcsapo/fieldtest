@@ -22,6 +22,7 @@ const IMPACT_ORDER: Impact[] = ['critical', 'serious', 'moderate', 'minor'];
 
 export interface AxePanelProps {
   containerRef: React.RefObject<HTMLElement | null>;
+  runAxe?: () => Promise<axe.AxeResults>;
   active: boolean;
   onResults?: (violationCount: number) => void;
 }
@@ -52,7 +53,7 @@ function clearHighlight(els: Element[]) {
   })
 }
 
-export function AxePanel({ containerRef, active, onResults }: AxePanelProps): React.ReactElement | null {
+export function AxePanel({ containerRef, runAxe, active, onResults }: AxePanelProps): React.ReactElement | null {
   const [state, setState] = useState<RunState>({ phase: 'idle' });
   const [activeViolationId, setActiveViolationId] = useState<string | null>(null);
   const [passesExpanded, setPassesExpanded] = useState(false);
@@ -80,11 +81,12 @@ export function AxePanel({ containerRef, active, onResults }: AxePanelProps): Re
     }
     const container = containerRef.current
     if (!container) return
+    const searchRoot = container.ownerDocument ?? document
     const matched: Element[] = []
     for (const node of violation.nodes) {
       const selector = Array.isArray(node.target) ? node.target.join(' ') : String(node.target)
       try {
-        const found = container.querySelector(selector)
+        const found = searchRoot.querySelector(selector) ?? container.querySelector(selector)
         if (found) {
           matched.push(found)
           found.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
@@ -101,17 +103,13 @@ export function AxePanel({ containerRef, active, onResults }: AxePanelProps): Re
     if (!active) return;
 
     const el = containerRef.current;
-    if (!el) return;
+    if (!el && !runAxe) return;
 
     setState({ phase: 'running' });
 
-    // Use ownerDocument.body rather than the element itself to avoid React's
-    // __reactContainer$ circular reference when axe serializes the context
-    // for cross-frame postMessage communication.
-    const axeContext = el.ownerDocument?.body ?? el
+    const runner = runAxe ?? (() => axe.run(el!))
 
-    axe
-      .run(axeContext)
+    runner()
       .then((results) => {
         setState({ phase: 'done', violations: results.violations, passes: results.passes });
         onResults?.(results.violations.length);
@@ -122,7 +120,7 @@ export function AxePanel({ containerRef, active, onResults }: AxePanelProps): Re
           message: err instanceof Error ? err.message : String(err),
         });
       });
-  }, [active, containerRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active, runAxe, containerRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!active) return null;
 

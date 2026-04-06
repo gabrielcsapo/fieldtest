@@ -127,7 +127,7 @@ export function VisionFilter({ value, onChange }: VisionFilterProps) {
         {/* Popover */}
         {open && (
           <div style={{
-            position: 'absolute', bottom: 'calc(100% + 8px)', right: 0,
+            position: 'absolute', top: 'calc(100% + 8px)', right: 0,
             background: '#1a1a24', border: '1px solid #2a2a36',
             borderRadius: 10, overflow: 'hidden',
             boxShadow: '0 8px 32px rgba(0,0,0,0.5)',

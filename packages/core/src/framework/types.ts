@@ -26,6 +26,38 @@ export interface ConsoleEntry {
   timestamp: number
 }
 
+export interface MockCall {
+  /** Name of the exported function that was called */
+  fnName: string
+  /** Arguments passed to the function */
+  args: unknown[]
+  /** Value returned (or thrown) by the function */
+  result: unknown
+  /** Whether the function threw instead of returning */
+  threw: boolean
+  /** ms since epoch when the call happened */
+  timestamp: number
+}
+
+export interface MockEntry {
+  moduleId: string
+  hasFactory: boolean
+  /** Call history for every spied function exported by this mock */
+  calls: MockCall[]
+}
+
+export interface NetworkEntry {
+  method: string
+  url: string
+  status: number
+  /** Whether this request was intercepted by an MSW handler */
+  mocked: boolean
+  requestBody?: string
+  responseBody?: string
+  duration: number
+  timestamp: number
+}
+
 export interface TestCase {
   id: string
   name: string
@@ -38,6 +70,10 @@ export interface TestCase {
   snapshots: Snapshot[]
   /** Console output captured during this test */
   consoleLogs: ConsoleEntry[]
+  /** Network requests captured during this test (requires MSW integration) */
+  networkEntries: NetworkEntry[]
+  /** Module mocks active when this test ran (populated by the ViewTest Vite transform) */
+  mockEntries: MockEntry[]
   /** Coverage delta — statements hit specifically during this test */
   testCoverage: IstanbulCoverage | null
   /** Wall-clock ms the test took to run */

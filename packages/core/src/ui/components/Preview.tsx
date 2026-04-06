@@ -11,9 +11,11 @@ import { AssertionsTab } from './tabs/AssertionsTab'
 import { TraceTab } from './tabs/TraceTab'
 import { CodeTab } from './tabs/CodeTab'
 import { ConsoleTab } from './tabs/ConsoleTab'
+import { MocksPanel } from './tabs/MocksPanel'
+import { getRegisteredTabs } from '../plugins'
 import type { IstanbulCoverage, TestSuite } from '../../framework/types'
 
-type Tab = 'assertions' | 'timeline' | 'accessibility' | 'trace' | 'code' | 'console'
+type Tab = string
 
 interface Props {
   test: TestCase | null
@@ -156,6 +158,7 @@ const VIEWPORT_ICONS: Record<Viewport, () => React.ReactElement> = {
 interface DisplayApi {
   showTest: (suiteName: string, testName: string) => Promise<boolean>
   displayRoot: HTMLElement
+  runAxe?: () => Promise<import('axe-core').AxeResults>
 }
 
 export function Preview({ test, coverage, suites, onSelectTest }: Props) {
@@ -182,6 +185,7 @@ export function Preview({ test, coverage, suites, onSelectTest }: Props) {
   const dragStartY = useRef(0)
   const dragStartH = useRef(0)
   const canvasPaneRef = useRef<HTMLDivElement>(null)
+  const contentAreaRef = useRef<HTMLDivElement>(null)
 
   // Derived values needed before hooks (safe when test is null)
   const snapshotsEarly = test?.snapshots ?? []
@@ -252,7 +256,7 @@ export function Preview({ test, coverage, suites, onSelectTest }: Props) {
       return
     }
 
-    const canvas = canvasPaneRef.current
+    const canvas = contentAreaRef.current
     if (!canvas) return
 
     const vw = VIEWPORT_WIDTHS[viewport]
@@ -321,6 +325,8 @@ export function Preview({ test, coverage, suites, onSelectTest }: Props) {
   const showingSnapshot = activeSnap && activeFrame > 0
   const displayDoc = displayIframeRef.current?.contentDocument
 
+  const mockCallCount = test.mockEntries.reduce((n, e) => n + e.calls.length, 0)
+
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'assertions', label: 'Assertions', count: test.assertions.length },
     ...(snapshots.length > 1 ? [{ id: 'timeline' as Tab, label: 'Timeline', count: snapshots.length }] : []),
@@ -328,6 +334,12 @@ export function Preview({ test, coverage, suites, onSelectTest }: Props) {
     { id: 'trace', label: 'Trace' },
     { id: 'code', label: 'Code' },
     ...(test.consoleLogs.length > 0 ? [{ id: 'console' as Tab, label: 'Console', count: test.consoleLogs.length }] : [{ id: 'console' as Tab, label: 'Console' }]),
+    ...(test.mockEntries.length > 0 ? [{ id: 'mocks' as Tab, label: 'Mocks', count: mockCallCount || test.mockEntries.length }] : [{ id: 'mocks' as Tab, label: 'Mocks' }]),
+    ...getRegisteredTabs().map(p => ({
+      id: p.id,
+      label: p.label,
+      count: p.getCount?.(test),
+    })),
   ]
 
   const viewportW = VIEWPORT_WIDTHS[viewport]
@@ -364,75 +376,74 @@ export function Preview({ test, coverage, suites, onSelectTest }: Props) {
         {/* Top pane — canvas */}
         <div ref={canvasPaneRef} style={{
           ...(canvasPaneHeight !== null ? { height: canvasPaneHeight, flexShrink: 0 } : { flex: 1 }),
-          overflow: 'auto', background: '#0f0f13',
+          display: 'flex', flexDirection: 'column', background: '#0f0f13',
         }}>
-          {(displayHasContent || showingSnapshot) ? (
-            <div style={{
-              position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              minHeight: '100%', padding: 24, ...gridStyle(grid),
-            }}>
-              {/* Timeline snapshot view (static HTML) */}
-              {showingSnapshot && (
-                <div
-                  style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...constraintStyle, ...visionFilterStyle(vision) }}
-                  dangerouslySetInnerHTML={{ __html: activeSnap.html }}
-                />
-              )}
+          {/* Toolbar row — above the scroll area so content is never obstructed */}
+          <div style={{
+            flexShrink: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+            gap: 6, padding: '6px 12px', borderBottom: '1px solid #1a1a24',
+          }}>
+            {(['mobile', 'tablet', 'desktop'] as Viewport[]).map(vp => {
+              const Icon = VIEWPORT_ICONS[vp]
+              const isActive = viewport === vp
+              return (
+                <button key={vp} title={VIEWPORT_TITLES[vp]} onClick={() => setViewport(vp)} style={{
+                  width: 26, height: 26, borderRadius: 5, border: '1px solid',
+                  borderColor: isActive ? 'rgba(99,102,241,0.6)' : '#2a2a36',
+                  background: isActive ? 'rgba(99,102,241,0.2)' : 'transparent',
+                  color: isActive ? '#a5b4fc' : '#4b4b60',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}><Icon /></button>
+              )
+            })}
+            <div style={{ width: 1, height: 16, background: '#2a2a36' }} />
+            <MeasureToggle value={measure} onChange={setMeasure} />
+            <OutlineToggle value={outline} onChange={setOutline} targetDocument={displayDoc} />
+            <GridToggle value={grid} onChange={setGrid} />
+            <div style={{ width: 1, height: 16, background: '#2a2a36' }} />
+            <VisionFilter value={vision} onChange={setVision} />
+          </div>
 
-              {/* Live interactive component is shown in the display iframe overlay (positioned by useLayoutEffect) */}
-              {showLive && <div style={{ width: '100%', minHeight: 200 }} />}
-
-              {/* Floating toolbar */}
+          {/* Content area — scrollable */}
+          <div ref={contentAreaRef} style={{ flex: 1, overflow: 'auto' }}>
+            {(displayHasContent || showingSnapshot) ? (
               <div style={{
-                position: 'fixed', top: 56, right: 16, zIndex: 50,
-                display: 'flex', alignItems: 'center', gap: 6,
-                background: 'rgba(22,22,29,0.85)',
-                backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-                border: '1px solid #2a2a36', borderRadius: 10,
-                padding: '6px 10px', boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                minHeight: '100%', padding: 24, ...gridStyle(grid),
               }}>
-                {(['mobile', 'tablet', 'desktop'] as Viewport[]).map(vp => {
-                  const Icon = VIEWPORT_ICONS[vp]
-                  const isActive = viewport === vp
-                  return (
-                    <button key={vp} title={VIEWPORT_TITLES[vp]} onClick={() => setViewport(vp)} style={{
-                      width: 26, height: 26, borderRadius: 5, border: '1px solid',
-                      borderColor: isActive ? 'rgba(99,102,241,0.6)' : '#2a2a36',
-                      background: isActive ? 'rgba(99,102,241,0.2)' : 'transparent',
-                      color: isActive ? '#a5b4fc' : '#4b4b60',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}><Icon /></button>
-                  )
-                })}
-                <div style={{ width: 1, height: 16, background: '#2a2a36' }} />
-                <MeasureToggle value={measure} onChange={setMeasure} />
-                <OutlineToggle value={outline} onChange={setOutline} targetDocument={displayDoc} />
-                <GridToggle value={grid} onChange={setGrid} />
-                <div style={{ width: 1, height: 16, background: '#2a2a36' }} />
-                <VisionFilter value={vision} onChange={setVision} />
-              </div>
+                {/* Timeline snapshot view (static HTML) */}
+                {showingSnapshot && (
+                  <div
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', ...constraintStyle, ...visionFilterStyle(vision) }}
+                    dangerouslySetInnerHTML={{ __html: activeSnap.html }}
+                  />
+                )}
 
-              <MeasureOverlay info={measureInfo} />
-            </div>
-          ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4b4b60', height: '100%' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 40, marginBottom: 10, color: test.status === 'pass' ? '#22c55e' : '#4b4b60' }}>
-                  {test.status === 'pass' ? '✓' : test.status === 'pending' ? '○' : '◌'}
-                </div>
-                <div style={{ fontSize: 13 }}>
-                  {test.status === 'pass' ? 'Passed — no visual output' : test.status === 'pending' ? 'Run tests to see results' : '◌'}
+                {/* Live interactive component is shown in the display iframe overlay (positioned by useLayoutEffect) */}
+                {showLive && <div style={{ width: '100%', minHeight: 200 }} />}
+
+                <MeasureOverlay info={measureInfo} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4b4b60', height: '100%' }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 40, marginBottom: 10, color: test.status === 'pass' ? '#22c55e' : '#4b4b60' }}>
+                    {test.status === 'pass' ? '✓' : test.status === 'pending' ? '○' : '◌'}
+                  </div>
+                  <div style={{ fontSize: 13 }}>
+                    {test.status === 'pass' ? 'Passed — no visual output' : test.status === 'pending' ? 'Run tests to see results' : '◌'}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {test.error && test.assertions.every(a => a.status === 'pass') && (
-            <div style={{ margin: '16px 20px', padding: 16, borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 6 }}>Error</div>
-              <pre style={{ fontSize: 12, color: '#fca5a5', margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{test.error}</pre>
-            </div>
-          )}
+            {test.error && test.assertions.every(a => a.status === 'pass') && (
+              <div style={{ margin: '16px 20px', padding: 16, borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#ef4444', marginBottom: 6 }}>Error</div>
+                <pre style={{ fontSize: 12, color: '#fca5a5', margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{test.error}</pre>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Drag handle */}
@@ -452,10 +463,16 @@ export function Preview({ test, coverage, suites, onSelectTest }: Props) {
           <div style={{ flex: 1, overflow: 'auto' }}>
             {activeTab === 'assertions' && <AssertionsTab assertions={test.assertions} />}
             {activeTab === 'timeline' && <Timeline snapshots={snapshots} active={safeFrame} onSelect={setActiveFrame} />}
-            {activeTab === 'accessibility' && <AxePanel containerRef={canvasRef as React.RefObject<HTMLElement | null>} active={true} onResults={setAxeViolationCount} />}
+            {activeTab === 'accessibility' && <AxePanel containerRef={canvasRef as React.RefObject<HTMLElement | null>} runAxe={displayApiRef.current?.runAxe} active={true} onResults={setAxeViolationCount} />}
             {activeTab === 'trace' && <TraceTab containerRef={canvasRef as React.RefObject<HTMLElement | null>} />}
             {activeTab === 'code' && <CodeTab suiteName={test.suiteName} coverage={coverage} testCoverage={test.testCoverage} suites={suites} onSelectTest={onSelectTest} />}
             {activeTab === 'console' && <ConsoleTab consoleLogs={test.consoleLogs} />}
+            {activeTab === 'mocks' && <MocksPanel test={test} />}
+            {getRegisteredTabs().map(plugin => {
+              if (activeTab !== plugin.id) return null
+              const Component = plugin.component
+              return <Component key={plugin.id} test={test} />
+            })}
           </div>
         </div>
       </div>

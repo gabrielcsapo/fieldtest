@@ -91,7 +91,12 @@ export async function startApp(
       return container.innerHTML !== ''
     }
 
-    ;(window as unknown as Record<string, unknown>)['__vtDisplay'] = { showTest, displayRoot }
+    async function runAxe() {
+      const { default: axe } = await import('axe-core')
+      return axe.run(displayRoot)
+    }
+
+    ;(window as unknown as Record<string, unknown>)['__vtDisplay'] = { showTest, displayRoot, runAxe }
     window.parent?.postMessage({ type: '__vt_display_ready' }, '*')
     return
   }

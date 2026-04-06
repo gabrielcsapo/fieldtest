@@ -1,5 +1,19 @@
 import { store, setCurrentTest } from './store'
 import type { TestCase, TestSuite, IstanbulCoverage, ConsoleEntry, ConsoleLevel } from './types'
+import { runAfterTestHooks } from './hooks'
+import { clearCallLog, getMockEntriesWithCalls } from './mocks'
+
+export interface CoverageProvider {
+  snapshot(): Promise<unknown>
+  diff(before: unknown, after: unknown): Promise<IstanbulCoverage | null>
+  collect(): Promise<IstanbulCoverage | null>
+}
+
+let _coverageProvider: CoverageProvider | null = null
+
+export function setCoverageProvider(p: CoverageProvider | null): void {
+  _coverageProvider = p
+}
 
 // ─── Console interception ─────────────────────────────────────────────────────
 
@@ -45,39 +59,58 @@ function yieldToFrame(): Promise<void> {
   return new Promise<void>(r => requestAnimationFrame(() => r()))
 }
 
+async function takeCoverageSnap(): Promise<unknown> {
+  if (_coverageProvider) return _coverageProvider.snapshot()
+  const raw = getRawCoverage()
+  return raw ? snapshotCoverage(raw) : null
+}
+
+async function computeTestCoverage(beforeSnap: unknown): Promise<IstanbulCoverage | null> {
+  if (_coverageProvider) {
+    if (beforeSnap === null) return null
+    const afterSnap = await _coverageProvider.snapshot()
+    return _coverageProvider.diff(beforeSnap, afterSnap)
+  }
+  const afterCov = getRawCoverage()
+  return (beforeSnap && afterCov) ? diffCoverage(beforeSnap as IstanbulCoverage, afterCov) : null
+}
+
 async function execTest(test: TestCase, cleanup: (() => void) | null) {
   cleanup?.()
   store.updateTest(test.suiteId, test.id, { status: 'running' })
   setCurrentTest(test)
+  clearCallLog() // fresh spy log for this test
+  const sourceFile = store.getState().suites.find(s => s.id === test.suiteId)?.sourceFile
   const consoleLogs: ConsoleEntry[] = []
   const restoreConsole = interceptConsole(consoleLogs)
-  const coverageBefore = getRawCoverage()
-  const beforeSnap = coverageBefore ? snapshotCoverage(coverageBefore) : null
+  const beforeSnap = await takeCoverageSnap()
   const t0 = Date.now()
   try {
     await test.fn()
     const duration = Date.now() - t0
-    const afterCov = getRawCoverage()
-    const testCoverage = (beforeSnap && afterCov) ? diffCoverage(beforeSnap, afterCov) : null
+    const testCoverage = await computeTestCoverage(beforeSnap)
     store.updateTest(test.suiteId, test.id, {
       status: 'pass',
       snapshots: test.snapshots,
       assertions: test.assertions,
       consoleLogs,
+      networkEntries: test.networkEntries,
+      mockEntries: getMockEntriesWithCalls(sourceFile),
       testCoverage,
       duration,
     })
     return true
   } catch (e) {
     const duration = Date.now() - t0
-    const afterCov = getRawCoverage()
-    const testCoverage = (beforeSnap && afterCov) ? diffCoverage(beforeSnap, afterCov) : null
+    const testCoverage = await computeTestCoverage(beforeSnap)
     store.updateTest(test.suiteId, test.id, {
       status: 'fail',
       error: e instanceof Error ? e.message : String(e),
       snapshots: test.snapshots,
       assertions: test.assertions,
       consoleLogs,
+      networkEntries: test.networkEntries,
+      mockEntries: getMockEntriesWithCalls(sourceFile),
       testCoverage,
       duration,
     })
@@ -85,6 +118,7 @@ async function execTest(test: TestCase, cleanup: (() => void) | null) {
   } finally {
     restoreConsole()
     setCurrentTest(null)
+    await runAfterTestHooks()
   }
 }
 
@@ -171,9 +205,14 @@ function diffCoverage(before: IstanbulCoverage, after: IstanbulCoverage): Istanb
   return delta
 }
 
-function collectCoverage() {
-  const cov = getRawCoverage()
-  if (cov) store.setCoverage(cov)
+async function collectCoverage() {
+  if (_coverageProvider) {
+    const cov = await _coverageProvider.collect()
+    if (cov) store.setCoverage(cov)
+  } else {
+    const cov = getRawCoverage()
+    if (cov) store.setCoverage(cov)
+  }
 }
 
 export async function runAll() {
@@ -198,7 +237,7 @@ export async function runAll() {
   cleanup?.()
   store.setRunProgress(null)
   store.setRunning(false)
-  collectCoverage()
+  await collectCoverage()
 }
 
 export async function runSuite(suiteId: string) {
@@ -217,7 +256,7 @@ export async function runSuite(suiteId: string) {
   cleanup?.()
   store.setRunProgress(null)
   store.setRunning(false)
-  collectCoverage()
+  await collectCoverage()
 }
 
 export async function runTest(suiteId: string, testId: string) {
@@ -234,5 +273,5 @@ export async function runTest(suiteId: string, testId: string) {
   cleanup?.()
   store.setRunProgress(null)
   store.setRunning(false)
-  collectCoverage()
+  await collectCoverage()
 }

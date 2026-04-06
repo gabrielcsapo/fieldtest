@@ -20,6 +20,8 @@ export interface CacheEntry {
   cachedAt: number
   suites: SerializableTestSuite[]
   coverage: IstanbulCoverage | null
+  /** per-file sha256 hashes at the time the entry was written */
+  fileHashes?: Record<string, string>
 }
 
 // ─── Hash computation ─────────────────────────────────────────────────────────
@@ -44,19 +46,40 @@ function hashFileContent(filePath: string): string {
 }
 
 /**
- * Compute a stable cache key for a test file.
+ * Compute a stable cache key for a test file, also returning per-file hashes.
  * Key = SHA256 of (sorted file paths + their contents) for the test file + all its deps.
  */
-export function computeCacheKey(testFile: string, graph: DepGraph): string {
+export function computeCacheKey(testFile: string, graph: DepGraph): { key: string; fileHashes: Record<string, string> } {
   const deps = getDepsForFile(testFile, graph)
   const allFiles = [testFile, ...deps].sort()
 
   const hash = createHash('sha256')
+  const fileHashes: Record<string, string> = {}
   for (const f of allFiles) {
+    const fh = hashFileContent(f)
+    fileHashes[f] = fh
     hash.update(f + '\0')
-    hash.update(hashFileContent(f) + '\0')
+    hash.update(fh + '\0')
   }
-  return hash.digest('hex').slice(0, 24)
+  return { key: hash.digest('hex').slice(0, 24), fileHashes }
+}
+
+// ─── Cache index (testFile → last cache key) ──────────────────────────────────
+
+function getIndexPath(cacheDir: string): string {
+  return join(cacheDir, 'index.json')
+}
+
+export function readCacheIndex(cacheDir: string): Record<string, string> {
+  try {
+    return JSON.parse(readFileSync(getIndexPath(cacheDir), 'utf-8')) as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+function writeCacheIndex(cacheDir: string, index: Record<string, string>): void {
+  writeFileSync(getIndexPath(cacheDir), JSON.stringify(index))
 }
 
 // ─── Cache I/O ────────────────────────────────────────────────────────────────
@@ -76,10 +99,20 @@ export function readCache(cacheDir: string, key: string): CacheEntry | null {
   }
 }
 
-export function writeCache(cacheDir: string, key: string, entry: Omit<CacheEntry, 'hash' | 'cachedAt'>): void {
+export function readCacheByTestFile(cacheDir: string, testFile: string): CacheEntry | null {
+  const index = readCacheIndex(cacheDir)
+  const oldKey = index[testFile]
+  if (!oldKey) return null
+  return readCache(cacheDir, oldKey)
+}
+
+export function writeCache(cacheDir: string, key: string, testFile: string, entry: Omit<CacheEntry, 'hash' | 'cachedAt'>): void {
   mkdirSync(cacheDir, { recursive: true })
   const full: CacheEntry = { hash: key, cachedAt: Date.now(), ...entry }
   writeFileSync(join(cacheDir, `${key}.json`), JSON.stringify(full))
+  const index = readCacheIndex(cacheDir)
+  index[testFile] = key
+  writeCacheIndex(cacheDir, index)
 }
 
 export function clearCache(cacheDir: string): void {
