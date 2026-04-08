@@ -304,9 +304,11 @@ export function Preview({ test, coverage, suites, onSelectTest, initialFrame = 0
     return () => window.removeEventListener('message', onMessage)
   }, [])
 
-  // Re-render in display iframe whenever the selected test changes
+  // Re-render in display iframe whenever the selected test changes or completes a run
+  const lastSnapshotTimestamp = test?.snapshots[test.snapshots.length - 1]?.timestamp
   useEffect(() => {
     if (!displayReady || !test || !displayApiRef.current) return
+    if (test.status === 'running') return // wait for run to complete before refreshing
     setDisplayHasContent(false)
     canvasRef.current = null
     const snapHtml = test.snapshots[test.snapshots.length - 1]?.html
@@ -314,7 +316,7 @@ export function Preview({ test, coverage, suites, onSelectTest, initialFrame = 0
       setDisplayHasContent(rendered)
       if (rendered) canvasRef.current = displayApiRef.current?.displayRoot ?? null
     })
-  }, [test?.id, displayReady])
+  }, [test?.id, displayReady, lastSnapshotTimestamp])
 
   const onDragStart = useCallback((e: React.MouseEvent) => {
     dragging.current = true
