@@ -81,7 +81,7 @@ function wrapWithSpies(
 
 /**
  * Register a module mock. Call this at the top level of a test file.
- * The ViewTest Vite plugin hoists these calls before any transformed imports.
+ * The FieldTest Vite plugin hoists these calls before any transformed imports.
  *
  * @param moduleId   The module specifier to mock (e.g. `'./api'`, `'lodash'`)
  * @param factory    Optional factory — called once per test run. Omit for an
@@ -142,7 +142,7 @@ export function getMockEntriesWithCalls(sourceFile?: string): MockEntry[] {
 }
 
 /**
- * Runtime import shim automatically injected into test files by the ViewTest
+ * Runtime import shim automatically injected into test files by the FieldTest
  * Vite transform. You never need to call this directly.
  *
  * Checks the mock registry: if a mock is registered for `moduleId` it returns

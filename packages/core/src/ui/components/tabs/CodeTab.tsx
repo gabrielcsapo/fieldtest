@@ -299,7 +299,7 @@ export function CodeTab({ suiteName, coverage, testCoverage, suites, onSelectTes
     return (
       <div style={{ padding: "32px 20px", textAlign: "center", color: "#4b4b60", fontSize: 13 }}>
         <div style={{ fontSize: 28, marginBottom: 10 }}>◌</div>
-        Coverage not available — run <code style={{ color: "#a5b4fc" }}>viewtest --ui</code> to
+        Coverage not available — run <code style={{ color: "#a5b4fc" }}>fieldtest --ui</code> to
         enable
       </div>
     );

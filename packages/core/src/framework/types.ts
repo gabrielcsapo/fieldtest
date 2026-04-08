@@ -72,7 +72,7 @@ export interface TestCase {
   consoleLogs: ConsoleEntry[];
   /** Network requests captured during this test (requires MSW integration) */
   networkEntries: NetworkEntry[];
-  /** Module mocks active when this test ran (populated by the ViewTest Vite transform) */
+  /** Module mocks active when this test ran (populated by the FieldTest Vite transform) */
   mockEntries: MockEntry[];
   /** Coverage delta — statements hit specifically during this test */
   testCoverage: IstanbulCoverage | null;

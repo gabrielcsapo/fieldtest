@@ -466,7 +466,7 @@ export async function runNode() {
   // ── --clear-cache ──────────────────────────────────────────────────────────
   if (clearCacheFlag) {
     clearCache(getCacheDir(cwd));
-    console.log(`${CYAN}${BOLD}ViewTest${RESET} ${DIM}cache cleared${RESET}`);
+    console.log(`${CYAN}${BOLD}FieldTest${RESET} ${DIM}cache cleared${RESET}`);
     const otherArgs = args.filter((a) => a !== "--clear-cache");
     if (otherArgs.length === 0) return;
   }
@@ -482,7 +482,7 @@ export async function runNode() {
 
     const { suites, shards } = mergeShardResults(shardResults);
     console.log(
-      `\n${CYAN}${BOLD}ViewTest${RESET} ${DIM}merged ${shards.length} shard(s)${RESET}\n`,
+      `\n${CYAN}${BOLD}FieldTest${RESET} ${DIM}merged ${shards.length} shard(s)${RESET}\n`,
     );
 
     const mergeStart = Date.now();
@@ -513,7 +513,7 @@ export async function runNode() {
     }
 
     const initial = (await glob(globPattern, { cwd })).map((f) => resolve(cwd, f));
-    console.log(`\n${CYAN}${BOLD}ViewTest${RESET} ${DIM}watch${RESET}\n`);
+    console.log(`\n${CYAN}${BOLD}FieldTest${RESET} ${DIM}watch${RESET}\n`);
     console.log(`${DIM}watching src/  •  ${initial.length} test file(s) found${RESET}\n`);
     spawnRun(initial);
 
@@ -592,7 +592,7 @@ export async function runNode() {
   }
 
   const shardLabel = shard ? ` ${DIM}[shard ${shard.index}/${shard.total}]${RESET}` : "";
-  console.log(`\n${CYAN}${BOLD}ViewTest${RESET} ${DIM}node runner${RESET}${shardLabel}\n`);
+  console.log(`\n${CYAN}${BOLD}FieldTest${RESET} ${DIM}node runner${RESET}${shardLabel}\n`);
   const runStart = Date.now();
 
   // ── Build dep graph + cache lookup ─────────────────────────────────────────

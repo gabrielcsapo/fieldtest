@@ -1,7 +1,7 @@
 import "../src/globals.css";
 
 /**
- * Wrap every rendered component in the ViewTest preview environment.
+ * Wrap every rendered component in the FieldTest preview environment.
  * Add providers, themes, or global styles here — anything that your
  * components expect to exist at runtime.
  */

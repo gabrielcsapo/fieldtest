@@ -626,7 +626,7 @@ export function Preview({
           ref={displayIframeRef}
           name="__vt_display"
           src={displaySrc}
-          title="ViewTest Display"
+          title="FieldTest Display"
           style={{ position: "fixed", width: 0, height: 0, border: "none", pointerEvents: "none" }}
         />
         <div
@@ -699,7 +699,7 @@ export function Preview({
         ref={displayIframeRef}
         name="__vt_display"
         src={displaySrc}
-        title="ViewTest Display"
+        title="FieldTest Display"
         style={{ position: "fixed", width: 0, height: 0, border: "none", pointerEvents: "none" }}
       />
 

@@ -167,14 +167,14 @@ async function hasNodeBuiltinDep(
 // ─── Node test runner (server-side) ──────────────────────────────────────────
 
 /**
- * ID for the virtual module that replaces `@viewtest/core` when a test file is
+ * ID for the virtual module that replaces `@fieldtest/core` when a test file is
  * loaded via ssrLoadModule. Provides a DOM-free describe/it/expect that routes
  * calls through globalThis.__vtNodeCtx, which is set fresh for every test run.
  */
 const SSR_CORE_ID = "\0viewtest-ssr-core";
 
 /**
- * The code served as `@viewtest/core` in SSR (Node) context.
+ * The code served as `@fieldtest/core` in SSR (Node) context.
  * All DSL calls proxy through globalThis.__vtNodeCtx so each run gets
  * an isolated context without needing to invalidate the module cache.
  */
@@ -188,7 +188,7 @@ export function expect(val) { return globalThis.__vtNodeCtx?.expect(val) }
 export function mock(id, factory) { globalThis.__vtNodeCtx?.mock(id, factory) }
 export function unmock() {}
 export function clearAllMocks() {}
-export const render = () => { throw new Error('[viewtest] render() is not available in node tests') }
+export const render = () => { throw new Error('[fieldtest] render() is not available in node tests') }
 export const snapshot = async () => {}
 export const fireEvent = new Proxy({}, { get: () => async () => {} })
 export const act = async (fn) => fn()
@@ -678,7 +678,7 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
       const needsNode = NODE_ENV_OVERRIDE_RE.test(code) || (await hasNodeBuiltinDep(code, id));
       if (needsNode) {
         return {
-          code: `import { __vtRegisterNodeTest } from '@viewtest/core'\n__vtRegisterNodeTest(${JSON.stringify(id)})`,
+          code: `import { __vtRegisterNodeTest } from '@fieldtest/core'\n__vtRegisterNodeTest(${JSON.stringify(id)})`,
         };
       }
 
@@ -715,8 +715,8 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
 
     resolveId(id, _importer, options) {
       if (id === VIRTUAL_ID) return RESOLVED_ID;
-      // In SSR (Node) context, replace @viewtest/core with a DOM-free stub
-      if (id === "@viewtest/core" && options?.ssr) return SSR_CORE_ID;
+      // In SSR (Node) context, replace @fieldtest/core with a DOM-free stub
+      if (id === "@fieldtest/core" && options?.ssr) return SSR_CORE_ID;
     },
 
     load(id, options) {

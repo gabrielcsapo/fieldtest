@@ -6,6 +6,7 @@ import { StatusIcon } from "./StatusIcon";
 interface Props {
   state: StoreState;
   search: string;
+  onSearchChange: (q: string) => void;
   onSelect: (test: TestCase) => void;
   onPlayTest: (test: TestCase) => void;
 }
@@ -97,7 +98,7 @@ function GalleryCard({
   const [hovered, setHovered] = useState(false);
   return (
     <div
-      style={{ position: "relative" }}
+      style={{ position: "relative", minWidth: 0 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -150,9 +151,8 @@ function GalleryCard({
               style={{
                 fontSize: 11,
                 color: "#4b4b60",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                overflowWrap: "break-word",
+                wordBreak: "break-word",
               }}
             >
               {suiteName}
@@ -162,9 +162,8 @@ function GalleryCard({
                 fontSize: 12,
                 fontWeight: 600,
                 color: "#c4c4d4",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                overflowWrap: "break-word",
+                wordBreak: "break-word",
               }}
             >
               {test.name}
@@ -216,7 +215,7 @@ function GalleryCard({
   );
 }
 
-export function Gallery({ state, search, onSelect, onPlayTest }: Props) {
+export function Gallery({ state, search, onSearchChange, onSelect, onPlayTest }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -268,64 +267,141 @@ export function Gallery({ state, search, onSelect, onPlayTest }: Props) {
 
   const hasAnyVisual = state.suites.some((s) => s.tests.some((t) => t.snapshots.length > 0));
 
-  if (tests.length === 0) {
-    return (
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      {/* Search bar */}
       <div
         style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#4b4b60",
+          padding: "10px 16px",
+          borderBottom: "1px solid #2a2a36",
+          background: "#16161d",
+          flexShrink: 0,
         }}
       >
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 36, marginBottom: 10 }}>◌</div>
-          {!hasAnyVisual ? (
-            <div style={{ fontSize: 14 }}>No tests have rendered output yet</div>
-          ) : search ? (
-            <div style={{ fontSize: 14 }}>No visual tests match "{search}"</div>
-          ) : (
-            <div style={{ fontSize: 14 }}>No visual tests found</div>
+        <div style={{ position: "relative", maxWidth: 320 }}>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            style={{
+              position: "absolute",
+              left: 8,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#4b4b60",
+              pointerEvents: "none",
+            }}
+          >
+            <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
+            <line
+              x1="7.5"
+              y1="7.5"
+              x2="11"
+              y2="11"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search tests…"
+            value={search}
+            onChange={(e) => onSearchChange(e.target.value)}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              background: "#0f0f13",
+              border: "1px solid #2a2a36",
+              borderRadius: 6,
+              padding: "5px 8px 5px 26px",
+              fontSize: 12,
+              color: "#c4c4d4",
+              outline: "none",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
+            onBlur={(e) => (e.target.style.borderColor = "#2a2a36")}
+          />
+          {search && (
+            <button
+              onClick={() => onSearchChange("")}
+              style={{
+                position: "absolute",
+                right: 6,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "#4b4b60",
+                cursor: "pointer",
+                fontSize: 14,
+                lineHeight: 1,
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
           )}
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: PAD }}>
-      <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
-        {virtualizer.getVirtualItems().map((vRow) => {
-          const rowItems = rows[vRow.index];
-          return (
-            <div
-              key={vRow.key}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${vRow.start}px)`,
-                display: "grid",
-                gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                gap: GAP,
-                paddingBottom: GAP,
-              }}
-            >
-              {rowItems.map(({ test, suiteName }) => (
-                <GalleryCard
-                  key={test.id}
-                  test={test}
-                  suiteName={suiteName}
-                  onSelect={() => onSelect(test)}
-                  onPlayTest={() => onPlayTest(test)}
-                />
-              ))}
-            </div>
-          );
-        })}
-      </div>
+      {tests.length === 0 ? (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#4b4b60",
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 10 }}>◌</div>
+            {!hasAnyVisual ? (
+              <div style={{ fontSize: 14 }}>No tests have rendered output yet</div>
+            ) : search ? (
+              <div style={{ fontSize: 14 }}>No visual tests match "{search}"</div>
+            ) : (
+              <div style={{ fontSize: 14 }}>No visual tests found</div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div ref={scrollRef} style={{ flex: 1, overflow: "auto", padding: PAD }}>
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+            {virtualizer.getVirtualItems().map((vRow) => {
+              const rowItems = rows[vRow.index];
+              return (
+                <div
+                  key={vRow.key}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${vRow.start}px)`,
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                    gap: GAP,
+                    paddingBottom: GAP,
+                  }}
+                >
+                  {rowItems.map(({ test, suiteName }) => (
+                    <GalleryCard
+                      key={test.id}
+                      test={test}
+                      suiteName={suiteName}
+                      onSelect={() => onSelect(test)}
+                      onPlayTest={() => onPlayTest(test)}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

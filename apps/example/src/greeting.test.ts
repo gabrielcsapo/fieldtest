@@ -1,5 +1,5 @@
 /**
- * Demonstrates ViewTest's module mocking via mock().
+ * Demonstrates FieldTest's module mocking via mock().
  *
  * The Vite plugin transforms the static `import { getGreeting }` below into
  * an `await __ftImport(...)` call, so the mock factory registered above it

@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { Store } from "../framework/store";
 import type { StoreState, TestCase, RunProgress } from "../framework/types";
-import { TestTree } from "./components/TestTree";
+import { TestTree, ViewToggle } from "./components/TestTree";
 import { Preview } from "./components/Preview";
 import { Gallery } from "./components/Gallery";
-import { CoverageExplorer } from "./components/CoverageExplorer";
+import { CoverageExplorer, CoverageFileList } from "./components/CoverageExplorer";
 import { GraphView } from "./components/GraphView";
 
 export type AppView = "detail" | "gallery" | "coverage" | "graph";
@@ -348,6 +348,7 @@ export function App() {
   const [view, setView] = useState<AppView>("detail");
   const [search, setSearch] = useState("");
   const [sandboxReady, setSandboxReady] = useState(false);
+  const [selectedCoverageFile, setSelectedCoverageFile] = useState<string | null>(null);
 
   // Subscribe to sandbox store once it signals readiness
   useEffect(() => {
@@ -426,7 +427,7 @@ export function App() {
         ref={sandboxRef}
         name={SANDBOX_NAME}
         src="./index.html"
-        title="ViewTest Sandbox"
+        title="FieldTest Sandbox"
         style={{
           position: "fixed",
           width: 0,
@@ -438,122 +439,176 @@ export function App() {
         }}
       />
 
-      <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      <div
+        style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}
+      >
+        {/* ── Global navbar ── */}
         <div
           style={{
-            width: 280,
-            minWidth: 220,
-            borderRight: "1px solid #2a2a36",
-            overflow: "hidden",
+            height: 44,
+            flexShrink: 0,
+            borderBottom: "1px solid #2a2a36",
+            background: "#16161d",
             display: "flex",
-            flexDirection: "column",
+            alignItems: "center",
+            padding: "0 16px",
+            gap: 12,
           }}
         >
-          <TestTree
-            state={state}
-            selected={selected}
-            selectedSuiteId={selectedSuiteId}
-            search={search}
-            view={view}
-            onSelect={handleSelect}
-            onSelectSuite={handleSelectSuite}
-            onSearchChange={setSearch}
-            onViewChange={setView}
-            onRunAll={handleRunAll}
-            onRunSuite={handleRunSuite}
-            onRunTest={handleRunTest}
-          />
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: 14,
+              color: "#a5b4fc",
+              letterSpacing: "0.05em",
+              textTransform: "uppercase",
+              marginRight: "auto",
+            }}
+          >
+            Fieldtest
+          </span>
+          <ViewToggle view={view} onChange={setView} />
         </div>
 
+        {/* ── Content row ── */}
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-          {!sandboxReady ? (
+          {/* Left rail — TestTree for detail, coverage file list for coverage, hidden for gallery/graph */}
+          {view === "detail" ? (
             <div
               style={{
-                flex: 1,
+                width: 280,
+                minWidth: 220,
+                borderRight: "1px solid #2a2a36",
+                overflow: "hidden",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#4b4b60",
                 flexDirection: "column",
-                gap: 12,
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <circle
-                  cx="10"
-                  cy="10"
-                  r="8"
-                  stroke="#6366f1"
-                  strokeWidth="1.5"
-                  strokeDasharray="12 6"
-                  strokeLinecap="round"
-                >
-                  <animateTransform
-                    attributeName="transform"
-                    type="rotate"
-                    from="0 10 10"
-                    to="360 10 10"
-                    dur="0.8s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-              </svg>
-              <span style={{ fontSize: 13 }}>Loading test sandbox…</span>
+              <TestTree
+                state={state}
+                selected={selected}
+                selectedSuiteId={selectedSuiteId}
+                search={search}
+                onSelect={handleSelect}
+                onSelectSuite={handleSelectSuite}
+                onSearchChange={setSearch}
+                onRunAll={handleRunAll}
+                onRunSuite={handleRunSuite}
+                onRunTest={handleRunTest}
+              />
             </div>
-          ) : view === "gallery" ? (
-            <Gallery
-              state={state}
-              search={search}
-              onSelect={handleSelect}
-              onPlayTest={handlePlayTest}
-            />
           ) : view === "coverage" ? (
-            <CoverageExplorer
-              coverage={state.coverage}
-              suites={state.suites}
-              onSelectTest={(suiteId, testId) => {
-                const test = state.suites
-                  .flatMap((s) => s.tests)
-                  .find((t) => t.suiteId === suiteId && t.id === testId);
-                if (test) {
-                  setSelected(test);
-                  setView("detail");
-                }
+            <div
+              style={{
+                width: 280,
+                minWidth: 220,
+                borderRight: "1px solid #2a2a36",
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+                background: "#16161d",
               }}
-            />
-          ) : view === "graph" ? (
-            <GraphView
-              suites={state.suites}
-              coverage={state.coverage}
-              onSelectSuite={(suiteId) => {
-                const suite = state.suites.find((s) => s.id === suiteId);
-                if (suite?.tests[0]) {
-                  setSelected(suite.tests[0]);
-                  setView("detail");
-                }
-              }}
-            />
-          ) : selectedSuiteId && !selected ? (
-            <SuiteOverview
-              suite={state.suites.find((s) => s.id === selectedSuiteId) ?? null}
-              running={state.running}
-              onSelectTest={handleSelect}
-              onRunSuite={handleRunSuite}
-              onRunTest={handleRunTest}
-            />
-          ) : (
-            <Preview
-              test={selected}
-              coverage={state.coverage}
-              suites={state.suites}
-              onSelectTest={(suiteId, testId) => {
-                const test = state.suites
-                  .flatMap((s) => s.tests)
-                  .find((t) => t.suiteId === suiteId && t.id === testId);
-                if (test) setSelected(test);
-              }}
-            />
-          )}
+            >
+              <CoverageFileList
+                coverage={state.coverage}
+                selectedFile={selectedCoverageFile}
+                onSelectFile={setSelectedCoverageFile}
+              />
+            </div>
+          ) : null}
+
+          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+            {!sandboxReady ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#4b4b60",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <circle
+                    cx="10"
+                    cy="10"
+                    r="8"
+                    stroke="#6366f1"
+                    strokeWidth="1.5"
+                    strokeDasharray="12 6"
+                    strokeLinecap="round"
+                  >
+                    <animateTransform
+                      attributeName="transform"
+                      type="rotate"
+                      from="0 10 10"
+                      to="360 10 10"
+                      dur="0.8s"
+                      repeatCount="indefinite"
+                    />
+                  </circle>
+                </svg>
+                <span style={{ fontSize: 13 }}>Loading test sandbox…</span>
+              </div>
+            ) : view === "gallery" ? (
+              <Gallery
+                state={state}
+                search={search}
+                onSearchChange={setSearch}
+                onSelect={handleSelect}
+                onPlayTest={handlePlayTest}
+              />
+            ) : view === "coverage" ? (
+              <CoverageExplorer
+                coverage={state.coverage}
+                suites={state.suites}
+                selectedFile={selectedCoverageFile}
+                onSelectTest={(suiteId, testId) => {
+                  const test = state.suites
+                    .flatMap((s) => s.tests)
+                    .find((t) => t.suiteId === suiteId && t.id === testId);
+                  if (test) {
+                    setSelected(test);
+                    setView("detail");
+                  }
+                }}
+              />
+            ) : view === "graph" ? (
+              <GraphView
+                suites={state.suites}
+                coverage={state.coverage}
+                onSelectSuite={(suiteId) => {
+                  const suite = state.suites.find((s) => s.id === suiteId);
+                  if (suite?.tests[0]) {
+                    setSelected(suite.tests[0]);
+                    setView("detail");
+                  }
+                }}
+              />
+            ) : selectedSuiteId && !selected ? (
+              <SuiteOverview
+                suite={state.suites.find((s) => s.id === selectedSuiteId) ?? null}
+                running={state.running}
+                onSelectTest={handleSelect}
+                onRunSuite={handleRunSuite}
+                onRunTest={handleRunTest}
+              />
+            ) : (
+              <Preview
+                test={selected}
+                coverage={state.coverage}
+                suites={state.suites}
+                onSelectTest={(suiteId, testId) => {
+                  const test = state.suites
+                    .flatMap((s) => s.tests)
+                    .find((t) => t.suiteId === suiteId && t.id === testId);
+                  if (test) setSelected(test);
+                }}
+              />
+            )}
+          </div>
         </div>
       </div>
 

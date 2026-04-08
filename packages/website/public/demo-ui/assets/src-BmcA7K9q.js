@@ -1,2 +1,0 @@
-import { n as e } from "./src-bHa7jhTB.js";
-export { e as registerTab };

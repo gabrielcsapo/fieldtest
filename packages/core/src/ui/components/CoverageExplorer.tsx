@@ -293,35 +293,216 @@ function SourceView({
   );
 }
 
-// ── CoverageExplorer ─────────────────────────────────────────────────────────
+// ── CoverageFileList ─────────────────────────────────────────────────────────
 
-interface Props {
+interface CoverageFileListProps {
   coverage: IstanbulCoverage | null;
-  suites: TestSuite[];
-  onSelectTest: (suiteId: string, testId: string) => void;
+  selectedFile: string | null;
+  onSelectFile: (path: string) => void;
 }
 
-export function CoverageExplorer({ coverage, suites, onSelectTest }: Props) {
+export function CoverageFileList({ coverage, selectedFile, onSelectFile }: CoverageFileListProps) {
   const [allFiles, setAllFiles] = useState<string[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [modal, setModal] = useState<{ lineNum: number; tests: TestRef[] } | null>(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetch("/__fieldtest_files__")
       .then((r) => r.json() as Promise<string[]>)
       .then((files) => {
         setAllFiles(files);
-        if (files.length > 0 && !selected) {
+        if (files.length > 0 && !selectedFile) {
           const sorted = [...files].sort((a, b) => {
             const pa = coverage?.[a] ? coveragePct(coverage[a]) : 0;
             const pb = coverage?.[b] ? coveragePct(coverage[b]) : 0;
             return pa - pb;
           });
-          setSelected(sorted[0]);
+          onSelectFile(sorted[0]);
         }
       })
       .catch(() => {});
   }, [coverage]);
+
+  if (!coverage) {
+    return (
+      <div
+        style={{
+          padding: "20px 12px",
+          fontSize: 12,
+          color: "#4b4b60",
+          textAlign: "center",
+          lineHeight: 1.6,
+        }}
+      >
+        Run tests to see coverage
+      </div>
+    );
+  }
+
+  const coveredPaths = new Set(Object.keys(coverage));
+  const allPaths = new Set([...allFiles, ...coveredPaths]);
+  const q = search.toLowerCase();
+  const entries: FileEntry[] = [...allPaths]
+    .filter((p) => !p.includes(".test.") && !p.includes(".spec."))
+    .filter((p) => !q || shortPath(p).toLowerCase().includes(q))
+    .map((p) => {
+      const fileCov = coverage[p] ?? null;
+      return { path: p, fileCov, pct: fileCov ? coveragePct(fileCov) : 0 };
+    })
+    .sort((a, b) => a.pct - b.pct);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+      {/* Search bar */}
+      <div style={{ padding: "8px 8px", borderBottom: "1px solid #2a2a36", flexShrink: 0 }}>
+        <div style={{ position: "relative" }}>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            style={{
+              position: "absolute",
+              left: 8,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#4b4b60",
+              pointerEvents: "none",
+            }}
+          >
+            <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
+            <line
+              x1="7.5"
+              y1="7.5"
+              x2="11"
+              y2="11"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+          </svg>
+          <input
+            type="text"
+            placeholder="Filter files…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              background: "#0f0f13",
+              border: "1px solid #2a2a36",
+              borderRadius: 6,
+              padding: "5px 8px 5px 26px",
+              fontSize: 12,
+              color: "#c4c4d4",
+              outline: "none",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
+            onBlur={(e) => (e.target.style.borderColor = "#2a2a36")}
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              style={{
+                position: "absolute",
+                right: 6,
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "#4b4b60",
+                cursor: "pointer",
+                fontSize: 14,
+                lineHeight: 1,
+                padding: 0,
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </div>
+      <div style={{ overflowY: "auto", flex: 1 }}>
+        {entries.map((entry) => {
+          const isActive = entry.path === selectedFile;
+          return (
+            <button
+              key={entry.path}
+              onClick={() => onSelectFile(entry.path)}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "7px 12px",
+                background: isActive ? "#1e1e2e" : "transparent",
+                borderLeft: `2px solid ${isActive ? "#6366f1" : "transparent"}`,
+                border: "none",
+                borderLeftWidth: 2,
+                borderLeftStyle: "solid",
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <div
+                style={{
+                  width: 28,
+                  height: 4,
+                  background: "#2a2a36",
+                  borderRadius: 2,
+                  flexShrink: 0,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${entry.pct}%`,
+                    background: pctColor(entry.pct),
+                    borderRadius: 2,
+                  }}
+                />
+              </div>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: pctColor(entry.pct),
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  width: 30,
+                }}
+              >
+                {entry.pct}%
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  color: isActive ? "#c4c4d4" : "#6b7280",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {shortPath(entry.path)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── CoverageExplorer ─────────────────────────────────────────────────────────
+
+interface Props {
+  coverage: IstanbulCoverage | null;
+  suites: TestSuite[];
+  selectedFile: string | null;
+  onSelectTest: (suiteId: string, testId: string) => void;
+}
+
+export function CoverageExplorer({ coverage, suites, selectedFile, onSelectTest }: Props) {
+  const [modal, setModal] = useState<{ lineNum: number; tests: TestRef[] } | null>(null);
 
   const handleLineClick = useCallback((lineNum: number, tests: TestRef[]) => {
     setModal({ lineNum, tests });
@@ -348,15 +529,14 @@ export function CoverageExplorer({ coverage, suites, onSelectTest }: Props) {
         <div style={{ fontSize: 14 }}>Run tests to see coverage</div>
         <div style={{ fontSize: 12, color: "#3a3a4e" }}>
           Coverage data is collected when running via{" "}
-          <code style={{ color: "#a5b4fc" }}>viewtest --ui</code>
+          <code style={{ color: "#a5b4fc" }}>fieldtest --ui</code>
         </div>
       </div>
     );
   }
 
   const coveredPaths = new Set(Object.keys(coverage));
-  const allPaths = new Set([...allFiles, ...coveredPaths]);
-  const entries: FileEntry[] = [...allPaths]
+  const entries: FileEntry[] = [...coveredPaths]
     .filter((p) => !p.includes(".test.") && !p.includes(".spec."))
     .map((p) => {
       const fileCov = coverage[p] ?? null;
@@ -376,9 +556,11 @@ export function CoverageExplorer({ coverage, suites, onSelectTest }: Props) {
   const fullyTested = entries.filter((e) => e.pct === 100).length;
   const untested = entries.filter((e) => e.pct === 0).length;
 
-  const selectedEntry = selected ? (entries.find((e) => e.path === selected) ?? null) : null;
-  const lineTestIndex = selected
-    ? buildLineTestIndex(selected, suites)
+  const selectedEntry = selectedFile
+    ? (entries.find((e) => e.path === selectedFile) ?? null)
+    : null;
+  const lineTestIndex = selectedFile
+    ? buildLineTestIndex(selectedFile, suites)
     : { map: new Map<number, TestRef[]>(), totalTestsForFile: 0 };
 
   return (
@@ -421,159 +603,80 @@ export function CoverageExplorer({ coverage, suites, onSelectTest }: Props) {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-        {/* File sidebar */}
-        <div
-          style={{
-            width: 240,
-            minWidth: 180,
-            borderRight: "1px solid #2a2a36",
-            overflowY: "auto",
-            background: "#16161d",
-          }}
-        >
-          {entries.map((entry) => {
-            const isActive = entry.path === selected;
-            return (
-              <button
-                key={entry.path}
-                onClick={() => setSelected(entry.path)}
-                style={{
-                  width: "100%",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "7px 12px",
-                  background: isActive ? "#1e1e2e" : "transparent",
-                  borderLeft: `2px solid ${isActive ? "#6366f1" : "transparent"}`,
-                  border: "none",
-                  borderLeftWidth: 2,
-                  borderLeftStyle: "solid",
-                  cursor: "pointer",
-                  textAlign: "left",
-                }}
-              >
-                <div
-                  style={{
-                    width: 28,
-                    height: 4,
-                    background: "#2a2a36",
-                    borderRadius: 2,
-                    flexShrink: 0,
-                    overflow: "hidden",
-                  }}
-                >
-                  <div
-                    style={{
-                      height: "100%",
-                      width: `${entry.pct}%`,
-                      background: pctColor(entry.pct),
-                      borderRadius: 2,
-                    }}
-                  />
-                </div>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: pctColor(entry.pct),
-                    fontWeight: 700,
-                    flexShrink: 0,
-                    width: 30,
-                  }}
-                >
-                  {entry.pct}%
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: isActive ? "#c4c4d4" : "#6b7280",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {shortPath(entry.path)}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Source pane */}
-        <div style={{ flex: 1, overflowY: "auto", background: "#0f0f13" }}>
-          {selectedEntry ? (
-            <>
-              <div
-                style={{
-                  padding: "10px 16px",
-                  borderBottom: "1px solid #2a2a36",
-                  background: "#16161d",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  position: "sticky",
-                  top: 0,
-                  zIndex: 1,
-                }}
-              >
-                <span style={{ fontSize: 12, fontFamily: "monospace", color: "#6b7280" }}>
-                  {shortPath(selectedEntry.path)}
-                </span>
-                <span
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: pctColor(selectedEntry.pct),
-                    background: `${pctColor(selectedEntry.pct)}1a`,
-                    border: `1px solid ${pctColor(selectedEntry.pct)}40`,
-                    borderRadius: 4,
-                    padding: "1px 6px",
-                  }}
-                >
-                  {selectedEntry.pct}% statements
-                </span>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
-                  {[
-                    { color: "rgba(34,197,94,0.3)", label: "Covered" },
-                    { color: "rgba(239,68,68,0.3)", label: "Not covered" },
-                  ].map(({ color, label }) => (
-                    <div
-                      key={label}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        fontSize: 11,
-                        color: "#4b4b60",
-                      }}
-                    >
-                      <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
-                      {label}
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <SourceView
-                entry={selectedEntry}
-                lineTestIndex={lineTestIndex}
-                onLineClick={handleLineClick}
-              />
-            </>
-          ) : (
+      {/* Source pane */}
+      <div style={{ flex: 1, overflowY: "auto", background: "#0f0f13" }}>
+        {selectedEntry ? (
+          <>
             <div
               style={{
+                padding: "10px 16px",
+                borderBottom: "1px solid #2a2a36",
+                background: "#16161d",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
-                color: "#4b4b60",
-                fontSize: 13,
+                gap: 10,
+                position: "sticky",
+                top: 0,
+                zIndex: 1,
               }}
             >
-              Select a file
+              <span style={{ fontSize: 12, fontFamily: "monospace", color: "#6b7280" }}>
+                {shortPath(selectedEntry.path)}
+              </span>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: pctColor(selectedEntry.pct),
+                  background: `${pctColor(selectedEntry.pct)}1a`,
+                  border: `1px solid ${pctColor(selectedEntry.pct)}40`,
+                  borderRadius: 4,
+                  padding: "1px 6px",
+                }}
+              >
+                {selectedEntry.pct}% statements
+              </span>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
+                {[
+                  { color: "rgba(34,197,94,0.3)", label: "Covered" },
+                  { color: "rgba(239,68,68,0.3)", label: "Not covered" },
+                ].map(({ color, label }) => (
+                  <div
+                    key={label}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      fontSize: 11,
+                      color: "#4b4b60",
+                    }}
+                  >
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
+                    {label}
+                  </div>
+                ))}
+              </div>
             </div>
-          )}
-        </div>
+            <SourceView
+              entry={selectedEntry}
+              lineTestIndex={lineTestIndex}
+              onLineClick={handleLineClick}
+            />
+          </>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              color: "#4b4b60",
+              fontSize: 13,
+            }}
+          >
+            Select a file
+          </div>
+        )}
       </div>
 
       {modal && (

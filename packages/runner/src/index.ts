@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * ViewTest runner entry point.
+ * FieldTest runner entry point.
  *
- *   viewtest            — run all tests in Node
- *   viewtest --watch    — watch mode
- *   viewtest --ui       — start browser UI (Vite dev server)
+ *   fieldtest            — run all tests in Node
+ *   fieldtest --watch    — watch mode
+ *   fieldtest --ui       — start browser UI (Vite dev server)
  */
 
 if (process.argv.includes("--ui")) {

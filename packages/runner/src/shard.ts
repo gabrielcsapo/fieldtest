@@ -39,7 +39,7 @@ export interface ShardResult {
 }
 
 export function getResultsDir(cwd: string): string {
-  return join(cwd, ".viewtest", "results");
+  return join(cwd, ".fieldtest", "results");
 }
 
 export function shardResultPath(resultsDir: string, shard: ShardConfig): string {

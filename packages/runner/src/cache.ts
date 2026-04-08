@@ -88,7 +88,7 @@ function writeCacheIndex(cacheDir: string, index: Record<string, string>): void 
 // ─── Cache I/O ────────────────────────────────────────────────────────────────
 
 export function getCacheDir(cwd: string): string {
-  return join(cwd, ".viewtest", "cache");
+  return join(cwd, ".fieldtest", "cache");
 }
 
 export function readCache(cacheDir: string, key: string): CacheEntry | null {

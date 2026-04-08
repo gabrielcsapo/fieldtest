@@ -1,5 +1,5 @@
 /**
- * Demonstrates ViewTest module mocking with function-as-parameter.
+ * Demonstrates FieldTest module mocking with function-as-parameter.
  *
  * `calculateTotal` (from ./cart) accepts a discount strategy as a callback.
  * We mock `./discounts` so the spied versions of `bulkDiscount` and

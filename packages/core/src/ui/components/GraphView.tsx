@@ -1032,7 +1032,7 @@ export function GraphView({ suites, coverage, onSelectSuite }: Props) {
           <div style={{ fontSize: 32, marginBottom: 10 }}>◌</div>
           <div style={{ fontSize: 13 }}>
             Graph endpoint unavailable — start with{" "}
-            <code style={{ color: "#a5b4fc" }}>viewtest --ui</code>
+            <code style={{ color: "#a5b4fc" }}>fieldtest --ui</code>
           </div>
         </div>
       </div>

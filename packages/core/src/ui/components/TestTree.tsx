@@ -9,11 +9,9 @@ interface Props {
   selected: TestCase | null;
   selectedSuiteId: string | null;
   search: string;
-  view: AppView;
   onSelect: (test: TestCase) => void;
   onSelectSuite: (suiteId: string) => void;
   onSearchChange: (q: string) => void;
-  onViewChange: (v: AppView) => void;
   onRunAll: () => void;
   onRunSuite: (suiteId: string) => void;
   onRunTest: (suiteId: string, testId: string) => void;
@@ -262,7 +260,7 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-function ViewToggle({ view, onChange }: { view: AppView; onChange: (v: AppView) => void }) {
+export function ViewToggle({ view, onChange }: { view: AppView; onChange: (v: AppView) => void }) {
   const btn = (v: AppView, icon: React.ReactNode, label: string) => (
     <button
       onClick={() => onChange(v)}
@@ -338,11 +336,9 @@ export function TestTree({
   selected,
   selectedSuiteId,
   search,
-  view,
   onSelect,
   onSelectSuite,
   onSearchChange,
-  onViewChange,
   onRunAll,
   onRunSuite,
   onRunTest,
@@ -417,165 +413,103 @@ export function TestTree({
     <div
       style={{ display: "flex", flexDirection: "column", height: "100%", background: "#16161d" }}
     >
-      {/* ── Header ── */}
-      <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid #2a2a36", flexShrink: 0 }}>
-        {/* Title + controls */}
+      {(state.lastRunAt || state.running || hasDurations) && (
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 8,
-          }}
+          style={{ padding: "10px 16px 12px", borderBottom: "1px solid #2a2a36", flexShrink: 0 }}
         >
-          <span
-            style={{
-              fontWeight: 700,
-              fontSize: 14,
-              color: "#a5b4fc",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-            }}
-          >
-            ViewTest
-          </span>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <ViewToggle view={view} onChange={onViewChange} />
-            <button
-              onClick={onRunAll}
-              disabled={state.running}
-              title="Run all"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
-                border: "none",
-                background: state.running ? "#1e1e2e" : "#6366f1",
-                color: state.running ? "#6b7280" : "#fff",
-                cursor: state.running ? "not-allowed" : "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              {state.running ? (
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <circle
-                    cx="6"
-                    cy="6"
-                    r="5"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeDasharray="8 4"
-                    strokeLinecap="round"
-                  >
-                    <animateTransform
-                      attributeName="transform"
-                      type="rotate"
-                      from="0 6 6"
-                      to="360 6 6"
-                      dur="0.8s"
-                      repeatCount="indefinite"
-                    />
-                  </circle>
-                </svg>
-              ) : (
-                <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
-                  <path
-                    d="M1 1.5L9 6L1 10.5V1.5Z"
-                    fill="currentColor"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Stats card */}
-        {(state.lastRunAt || state.running) && (
-          <div
-            style={{
-              marginBottom: 10,
-              borderRadius: 8,
-              background: "#0f0f13",
-              border: "1px solid #1e1e2e",
-              padding: "8px 10px",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
-            {/* Progress bar */}
-            {total > 0 && (
-              <div
-                style={{
-                  height: 3,
-                  borderRadius: 99,
-                  background: "#1e1e2e",
-                  overflow: "hidden",
-                  display: "flex",
-                }}
-              >
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${(pass / total) * 100}%`,
-                    background: "#22c55e",
-                    transition: "width 0.2s ease-out",
-                    flexShrink: 0,
-                  }}
-                />
-                <div
-                  style={{
-                    height: "100%",
-                    width: `${(fail / total) * 100}%`,
-                    background: "#ef4444",
-                    transition: "width 0.2s ease-out",
-                    flexShrink: 0,
-                  }}
-                />
-              </div>
-            )}
-            {/* Badges row */}
+          {/* Stats card */}
+          {(state.lastRunAt || state.running) && (
             <div
               style={{
+                borderRadius: 8,
+                background: "#0f0f13",
+                border: "1px solid #1e1e2e",
+                padding: "8px 10px",
                 display: "flex",
-                gap: 4,
-                flexWrap: "wrap",
-                fontVariantNumeric: "tabular-nums",
+                flexDirection: "column",
+                gap: 6,
               }}
             >
-              <span
+              {/* Progress bar */}
+              {total > 0 && (
+                <div
+                  style={{
+                    height: 3,
+                    borderRadius: 99,
+                    background: "#1e1e2e",
+                    overflow: "hidden",
+                    display: "flex",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${(pass / total) * 100}%`,
+                      background: "#22c55e",
+                      transition: "width 0.2s ease-out",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${(fail / total) * 100}%`,
+                      background: "#ef4444",
+                      transition: "width 0.2s ease-out",
+                      flexShrink: 0,
+                    }}
+                  />
+                </div>
+              )}
+              {/* Badges row */}
+              <div
                 style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "2px 7px",
-                  borderRadius: 99,
-                  background: "rgba(34,197,94,0.12)",
-                  color: "#22c55e",
+                  display: "flex",
+                  gap: 4,
+                  flexWrap: "wrap",
+                  fontVariantNumeric: "tabular-nums",
                 }}
               >
-                ✓ {pass}
-              </span>
-              {fail > 0 && (
                 <span
                   style={{
                     fontSize: 10,
                     fontWeight: 600,
                     padding: "2px 7px",
                     borderRadius: 99,
-                    background: "rgba(239,68,68,0.12)",
-                    color: "#ef4444",
+                    background: "rgba(34,197,94,0.12)",
+                    color: "#22c55e",
                   }}
                 >
-                  ✗ {fail}
+                  ✓ {pass}
                 </span>
-              )}
-              {pending > 0 && (
+                {fail > 0 && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: "2px 7px",
+                      borderRadius: 99,
+                      background: "rgba(239,68,68,0.12)",
+                      color: "#ef4444",
+                    }}
+                  >
+                    ✗ {fail}
+                  </span>
+                )}
+                {pending > 0 && (
+                  <span
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: "2px 7px",
+                      borderRadius: 99,
+                      background: "#1e1e2e",
+                      color: "#6b7280",
+                    }}
+                  >
+                    ○ {pending}
+                  </span>
+                )}
                 <span
                   style={{
                     fontSize: 10,
@@ -583,188 +517,251 @@ export function TestTree({
                     padding: "2px 7px",
                     borderRadius: 99,
                     background: "#1e1e2e",
-                    color: "#6b7280",
+                    color: "#4b4b60",
+                    marginLeft: "auto",
                   }}
                 >
-                  ○ {pending}
+                  {total} tests
                 </span>
-              )}
-              <span
-                style={{
-                  fontSize: 10,
-                  fontWeight: 600,
-                  padding: "2px 7px",
-                  borderRadius: 99,
-                  background: "#1e1e2e",
-                  color: "#4b4b60",
-                  marginLeft: "auto",
-                }}
-              >
-                {total} tests
-              </span>
-            </div>
-            {/* Timestamp + duration */}
-            {state.lastRunAt && !state.running && (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  fontSize: 10,
-                  color: "#3a3a4e",
-                }}
-              >
-                <span>{formatTime(state.lastRunAt)}</span>
-                {totalDuration !== null && (
-                  <span style={{ fontFamily: "monospace" }}>{formatDuration(totalDuration)}</span>
-                )}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Search */}
-        <div style={{ position: "relative" }}>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            style={{
-              position: "absolute",
-              left: 8,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: "#4b4b60",
-              pointerEvents: "none",
-            }}
-          >
-            <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
-            <line
-              x1="7.5"
-              y1="7.5"
-              x2="11"
-              y2="11"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinecap="round"
-            />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search tests…"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-            style={{
-              width: "100%",
-              boxSizing: "border-box",
-              background: "#0f0f13",
-              border: "1px solid #2a2a36",
-              borderRadius: 6,
-              padding: "5px 8px 5px 26px",
-              fontSize: 12,
-              color: "#c4c4d4",
-              outline: "none",
-            }}
-            onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
-            onBlur={(e) => (e.target.style.borderColor = "#2a2a36")}
-          />
-          {search && (
-            <button
-              onClick={() => onSearchChange("")}
-              style={{
-                position: "absolute",
-                right: 6,
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "none",
-                border: "none",
-                color: "#4b4b60",
-                cursor: "pointer",
-                fontSize: 14,
-                lineHeight: 1,
-                padding: 0,
-              }}
-            >
-              ×
-            </button>
+              {/* Timestamp + duration */}
+              {state.lastRunAt && !state.running && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 10,
+                    color: "#3a3a4e",
+                  }}
+                >
+                  <span>{formatTime(state.lastRunAt)}</span>
+                  {totalDuration !== null && (
+                    <span style={{ fontFamily: "monospace" }}>{formatDuration(totalDuration)}</span>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
+      )}
 
-        {/* Sort — shown after first run */}
-        {hasDurations && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 8 }}>
-            <span
-              style={{
-                fontSize: 10,
-                color: "#4b4b60",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-              }}
-            >
-              Sort
-            </span>
-            <div
-              style={{
-                display: "flex",
-                gap: 2,
-                background: "#0f0f13",
-                borderRadius: 5,
-                padding: 2,
-              }}
-            >
-              {(["default", "duration"] as const).map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => setSortBy(opt)}
-                  style={{
-                    fontSize: 10,
-                    padding: "2px 8px",
-                    borderRadius: 3,
-                    border: "none",
-                    cursor: "pointer",
-                    background: sortBy === opt ? "rgba(99,102,241,0.2)" : "transparent",
-                    color: sortBy === opt ? "#a5b4fc" : "#4b4b60",
-                    fontWeight: sortBy === opt ? 600 : 400,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
+      {/* ── Search + Run ── */}
+      <div
+        style={{
+          padding: "8px 16px",
+          borderBottom: "1px solid #2a2a36",
+          flexShrink: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button
+            onClick={onRunAll}
+            disabled={state.running}
+            title="Run all"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              border: "none",
+              background: state.running ? "#1e1e2e" : "#6366f1",
+              color: state.running ? "#6b7280" : "#fff",
+              cursor: state.running ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {state.running ? (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <circle
+                  cx="6"
+                  cy="6"
+                  r="5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeDasharray="8 4"
+                  strokeLinecap="round"
                 >
-                  {opt === "duration" && (
-                    <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                      <line
-                        x1="1"
-                        y1="8"
-                        x2="1"
-                        y2="4"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                      <line
-                        x1="4.5"
-                        y1="8"
-                        x2="4.5"
-                        y2="2"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                      <line
-                        x1="8"
-                        y1="8"
-                        x2="8"
-                        y2="0.5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                  )}
-                  {opt === "default" ? "Default" : "Slowest first"}
-                </button>
-              ))}
-            </div>
+                  <animateTransform
+                    attributeName="transform"
+                    type="rotate"
+                    from="0 6 6"
+                    to="360 6 6"
+                    dur="0.8s"
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              </svg>
+            ) : (
+              <svg width="10" height="12" viewBox="0 0 10 12" fill="none">
+                <path
+                  d="M1 1.5L9 6L1 10.5V1.5Z"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </button>
+          <div style={{ position: "relative", flex: 1, borderBottom: "1px solid #2a2a36" }}>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+              fill="none"
+              style={{
+                position: "absolute",
+                left: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#4b4b60",
+                pointerEvents: "none",
+              }}
+            >
+              <circle cx="5" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.2" />
+              <line
+                x1="7.5"
+                y1="7.5"
+                x2="11"
+                y2="11"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+              />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search tests…"
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#0f0f13",
+                border: "1px solid #2a2a36",
+                borderRadius: 6,
+                padding: "5px 8px 5px 26px",
+                fontSize: 12,
+                color: "#c4c4d4",
+                outline: "none",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "#6366f1")}
+              onBlur={(e) => (e.target.style.borderColor = "#2a2a36")}
+            />
+            {search && (
+              <button
+                onClick={() => onSearchChange("")}
+                style={{
+                  position: "absolute",
+                  right: 6,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  color: "#4b4b60",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  lineHeight: 1,
+                  padding: 0,
+                }}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
+        {hasDurations && (
+          <div style={{ position: "relative" }}>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              style={{
+                position: "absolute",
+                left: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#4b4b60",
+                pointerEvents: "none",
+              }}
+            >
+              <line
+                x1="1"
+                y1="9"
+                x2="1"
+                y2="6"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="5"
+                y1="9"
+                x2="5"
+                y2="3"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="9"
+                y1="9"
+                x2="9"
+                y2="1"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as "default" | "duration")}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#0f0f13",
+                border: "1px solid #2a2a36",
+                borderRadius: 6,
+                padding: "5px 8px 5px 26px",
+                fontSize: 12,
+                color: sortBy === "default" ? "#4b4b60" : "#c4c4d4",
+                outline: "none",
+                cursor: "pointer",
+                appearance: "none",
+              }}
+            >
+              <option value="default">Sort: default</option>
+              <option value="duration">Sort: slowest first</option>
+            </select>
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 10"
+              fill="none"
+              style={{
+                position: "absolute",
+                right: 8,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#4b4b60",
+                pointerEvents: "none",
+              }}
+            >
+              <path
+                d="M2 4l3 3 3-3"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
           </div>
         )}
       </div>
