@@ -9,6 +9,19 @@ import {
 } from "./coverageUtils";
 import type { TestRef, LineTestIndex } from "./coverageUtils";
 
+// ── static sources cache ─────────────────────────────────────────────────────
+// In static/CDN deployments (e.g. GitHub Pages), /__fieldtest_source__ doesn't exist.
+// buildUi() writes fieldtest-sources.json alongside the bundle as a fallback.
+let _staticSourcesPromise: Promise<Record<string, string>> | null = null;
+function loadStaticSources(): Promise<Record<string, string>> {
+  if (!_staticSourcesPromise) {
+    _staticSourcesPromise = fetch("./fieldtest-sources.json")
+      .then((r) => (r.ok ? (r.json() as Promise<Record<string, string>>) : {}))
+      .catch(() => ({}));
+  }
+  return _staticSourcesPromise;
+}
+
 // ── helpers ─────────────────────────────────────────────────────────────────
 
 function coveragePct(fileCov: IstanbulFileCoverage): number {
@@ -61,7 +74,15 @@ function SourceView({
       return;
     }
     fetch(`/__fieldtest_source__?path=${encodeURIComponent(entry.path)}`)
-      .then((r) => (r.ok ? r.text() : Promise.reject(`${r.status}`)))
+      .then((r) => {
+        if (r.ok) return r.text();
+        // Fallback: static sources bundle written by `fieldtest build` for CDN/static hosts
+        return loadStaticSources().then((sources) => {
+          const src = sources[entry.path];
+          if (src != null) return src;
+          return Promise.reject(`${r.status}`);
+        });
+      })
       .then(setSource)
       .catch((e: unknown) => setError(String(e)));
   }, [entry.path, entry.fileCov]);

@@ -283,4 +283,18 @@ export async function buildUi() {
   const absOutDir = resolve(root, outDir);
   const graphData = await buildGraphData(root).catch(() => ({ nodes: [], edges: [] }));
   await writeFile(join(absOutDir, "fieldtest-graph.json"), JSON.stringify(graphData));
+
+  // Write source file contents so CoverageExplorer can display source in static deployments.
+  // Without this, /__fieldtest_source__ requests 404 when served from a CDN/static host.
+  const srcDir = resolve(root, "src");
+  const allSourceFiles = await collectSourceFiles(srcDir).catch(() => [] as string[]);
+  const sourcesMap: Record<string, string> = {};
+  for (const f of allSourceFiles) {
+    try {
+      sourcesMap[f] = await readFile(f, "utf8");
+    } catch {
+      /* skip unreadable */
+    }
+  }
+  await writeFile(join(absOutDir, "fieldtest-sources.json"), JSON.stringify(sourcesMap));
 }
