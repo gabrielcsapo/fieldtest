@@ -13,9 +13,9 @@
   },
   "dependencies": {
     "@fieldtest/core": "workspace:*",
-    "msw": "^2.0.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "msw": "^2.13.2",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
     "@fieldtest/runner": "workspace:*",
@@ -23,7 +23,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^6.0.2",
-    "vite": "^8.0.3"
+    "vite": "^8.0.8"
   },
   "msw": {
     "workerDirectory": [
