@@ -1,4 +1,4 @@
-import { describe, it, expect, render, fireEvent } from "@fieldtest/core";
+import { describe, it, expect, render, fireEvent } from "fieldtest";
 import { TaskBoard } from "./TaskBoard";
 import type { Task } from "./TaskBoard";
 

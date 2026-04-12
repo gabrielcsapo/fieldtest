@@ -5,13 +5,16 @@
     "fieldtest": "./bin/fieldtest.js"
   },
   "type": "module",
+  "exports": {
+    "./bin/fieldtest.js": "./bin/fieldtest.js",
+    "./render": "./src/render.ts"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "test:node": "node ./bin/fieldtest.js"
   },
   "dependencies": {
     "@fieldtest/core": "workspace:*",
-    "@vitejs/plugin-react": "^6.0.1",
     "glob": "^13.0.6",
     "happy-dom": "^20.8.9",
     "tsx": "^4.21.0",
@@ -19,8 +22,7 @@
     "vite": "^8.0.8"
   },
   "devDependencies": {
-    "@types/node": "^25.5.2",
-    "typescript": "^6.0.2",
-    "vite-plugin-istanbul": "^8.0.0"
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.2"
   }
 }

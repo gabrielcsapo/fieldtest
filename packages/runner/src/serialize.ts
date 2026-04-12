@@ -35,6 +35,7 @@ export interface SerializableTestSuite {
   tests: SerializableTestCase[];
   status: TestStatus;
   sourceFile?: string;
+  duration?: number;
 }
 
 export function serializeSnapshot(s: Snapshot): SerializableSnapshot {
@@ -63,5 +64,6 @@ export function serializeTestSuite(s: TestSuite): SerializableTestSuite {
     tests: s.tests.map(serializeTestCase),
     status: s.status,
     sourceFile: s.sourceFile,
+    duration: s.duration,
   };
 }

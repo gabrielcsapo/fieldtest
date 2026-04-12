@@ -336,6 +336,29 @@ export async function runSuite(suiteId: string) {
   await collectCoverage();
 }
 
+/**
+ * Run a specific set of suites (by ID) with grep/timeout support.
+ * Used by the node runner for per-file streaming output.
+ */
+export async function runSuites(
+  suiteIds: string[],
+  options: { grep?: string; timeout?: number } = {},
+): Promise<void> {
+  if (options.timeout !== undefined) setTestTimeout(options.timeout);
+  const cleanup = await getCleanup();
+  const grepPattern = options.grep ? new RegExp(options.grep) : undefined;
+  const targetSuites = store.getState().suites.filter((s) => suiteIds.includes(s.id));
+  const onlyMode = targetSuites.some((s) => s.tests.some((t) => t.only));
+  const suiteOptions = { grepPattern, onlyMode };
+
+  for (const id of suiteIds) {
+    store.resetSuite(id);
+    const suite = store.getState().suites.find((s) => s.id === id);
+    if (suite) await execSuite(suite, cleanup, undefined, 0, suiteOptions);
+  }
+  cleanup?.();
+}
+
 export async function runTest(suiteId: string, testId: string) {
   const cleanup = await getCleanup();
   store.resetTest(suiteId, testId);

@@ -34,6 +34,21 @@ import { serializeTestSuite } from "./serialize.js";
 import type { SerializableTestSuite } from "./serialize.js";
 import { processSnapshots, snapshotPath } from "./snapshots.js";
 import type { IstanbulCoverage } from "@fieldtest/core";
+import {
+  RESET,
+  BOLD,
+  DIM,
+  YELLOW,
+  CYAN,
+  rel,
+  plural,
+  renderResults as _renderResults,
+  renderSummary,
+  renderCoverage,
+  renderSnapshotMismatches,
+  renderDepTree,
+  renderWatchSeparator,
+} from "./render.js";
 
 // ─── V8 coverage via NODE_V8_COVERAGE ────────────────────────────────────────
 
@@ -271,243 +286,46 @@ function buildDepGraph(testFiles: string[]): DepGraph {
   return { dependents, importedBy };
 }
 
-function getImportPath(changedFile: string, testFile: string, graph: DepGraph): string[] {
-  if (changedFile === testFile) return [changedFile];
-  const parents = graph.importedBy.get(testFile);
-  if (!parents?.has(changedFile)) return [changedFile, testFile];
+// ─── Thin CLI wrappers around render.ts ───────────────────────────────────────
 
-  const path = [changedFile];
-  let current = changedFile;
-  while (current !== testFile) {
-    const parent = parents.get(current);
-    if (!parent) break;
-    path.push(parent);
-    current = parent;
-  }
-  return path;
+function print(lines: string[]): void {
+  process.stdout.write(lines.join("\n") + "\n");
 }
 
-// ─── ASCII tree renderer ──────────────────────────────────────────────────────
-
-const RESET = "\x1b[0m",
-  BOLD = "\x1b[1m",
-  DIM = "\x1b[2m";
-const GREEN = "\x1b[32m",
-  RED = "\x1b[31m",
-  YELLOW = "\x1b[33m";
-const CYAN = "\x1b[36m";
-
-function rel(abs: string, cwd: string) {
-  return abs.startsWith(cwd + "/") ? abs.slice(cwd.length + 1) : abs;
-}
-
-function renderDepTree(
-  changedAbs: string,
-  affectedTests: string[],
-  reason: "direct" | "dep" | "fallback",
-  graph: DepGraph,
-  cwd: string,
-): string {
-  const lines: string[] = [];
-
-  if (reason === "fallback") {
-    lines.push(
-      `${YELLOW}${rel(changedAbs, cwd)}${RESET}  ${DIM}(not tracked — running all)${RESET}`,
-    );
-    return lines.join("\n");
-  }
-
-  lines.push(`${CYAN}${rel(changedAbs, cwd)}${RESET}`);
-
-  affectedTests.forEach((testFile, i) => {
-    const isLast = i === affectedTests.length - 1;
-    const branch = isLast ? "└─" : "├─";
-    const path = getImportPath(changedAbs, testFile, graph);
-    const via = path.slice(1, -1);
-    const viaStr =
-      via.length > 0 ? `  ${DIM}via ${via.map((f) => rel(f, cwd)).join(" → ")}${RESET}` : "";
-    lines.push(`  ${DIM}${branch}${RESET} ${GREEN}${rel(testFile, cwd)}${RESET}${viaStr}`);
-  });
-
-  return lines.join("\n");
-}
-
-// ─── Result rendering ─────────────────────────────────────────────────────────
-
-function renderResults(
-  suites: SerializableTestSuite[],
-  verbose = false,
-): { totalPass: number; totalFail: number; totalSkip: number } {
-  let totalPass = 0,
-    totalFail = 0,
-    totalSkip = 0;
-
-  for (const suite of suites) {
-    let suitePass = 0,
-      suiteFail = 0,
-      suiteSkip = 0;
-
-    for (const test of suite.tests) {
-      if (test.status === "skipped") {
-        suiteSkip++;
-        totalSkip++;
-        continue;
-      }
-      if (test.status === "pass") {
-        suitePass++;
-        totalPass++;
-      } else {
-        suiteFail++;
-        totalFail++;
-      }
-    }
-
-    if (verbose) {
-      const icon = suite.status === "pass" ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`;
-      console.log(`\n ${icon} ${BOLD}${suite.name}${RESET}`);
-
-      for (const test of suite.tests) {
-        if (test.status === "skipped") {
-          console.log(`   ${DIM}– ${test.name}${RESET}`);
-          continue;
-        }
-        const ti = test.status === "pass" ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`;
-        console.log(`   ${ti} ${test.status === "pass" ? DIM : ""}${test.name}${RESET}`);
-        for (const a of test.assertions) {
-          const ai = a.status === "pass" ? `${GREEN}·${RESET}` : `${RED}·${RESET}`;
-          console.log(`       ${ai} ${DIM}${a.label}${RESET}`);
-          if (a.error) console.log(`         ${RED}${a.error}${RESET}`);
-        }
-        if (test.error && test.assertions.every((a) => a.status === "pass")) {
-          console.log(`       ${RED}${test.error}${RESET}`);
-        }
-      }
-    } else {
-      // Condensed: one line per suite with counts, then only failing tests
-      const icon = suiteFail > 0 ? `${RED}✗${RESET}` : `${GREEN}✓${RESET}`;
-      const counts: string[] = [];
-      if (suitePass > 0) counts.push(`${GREEN}${suitePass} passed${RESET}`);
-      if (suiteFail > 0) counts.push(`${RED}${suiteFail} failed${RESET}`);
-      if (suiteSkip > 0) counts.push(`${DIM}${suiteSkip} skipped${RESET}`);
-      console.log(`\n ${icon} ${BOLD}${suite.name}${RESET}  ${DIM}(${counts.join(", ")})${RESET}`);
-
-      for (const test of suite.tests) {
-        if (test.status !== "fail") continue;
-        console.log(`   ${RED}✗${RESET} ${test.name}`);
-        for (const a of test.assertions) {
-          if (a.status !== "fail") continue;
-          console.log(`       ${RED}·${RESET} ${DIM}${a.label}${RESET}`);
-          if (a.error) console.log(`         ${RED}${a.error}${RESET}`);
-        }
-        if (test.error && test.assertions.every((a) => a.status === "pass")) {
-          console.log(`       ${RED}${test.error}${RESET}`);
-        }
-      }
-    }
-  }
-
-  return { totalPass, totalFail, totalSkip };
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = ms / 1000;
-  if (s < 60) return `${s.toFixed(2)}s`;
-  const m = Math.floor(s / 60);
-  const rem = (s % 60).toFixed(0).padStart(2, "0");
-  return `${m}m ${rem}s`;
-}
-
-function printCoverage(coverage: IstanbulCoverage, cwd: string) {
-  type FileStats = {
-    stmts: number;
-    stmtsCov: number;
-    fns: number;
-    fnsCov: number;
-    branches: number;
-    branchesCov: number;
-  };
-
-  function fileStats(fc: IstanbulCoverage[string]): FileStats {
-    const stmts = Object.keys(fc.statementMap ?? {}).length;
-    const stmtsCov = Object.values(fc.s).filter((v) => (v as number) > 0).length;
-    const fns = Object.keys(fc.fnMap ?? {}).length;
-    const fnsCov = Object.values(fc.f).filter((v) => (v as number) > 0).length;
-    const allBranches = Object.values(fc.b ?? {}).flat() as number[];
-    const branches = allBranches.length;
-    const branchesCov = allBranches.filter((v) => v > 0).length;
-    return { stmts, stmtsCov, fns, fnsCov, branches, branchesCov };
-  }
-
-  function pct(covered: number, total: number): number {
-    return total === 0 ? 100 : Math.round((covered / total) * 100);
-  }
-
-  function colorPct(covered: number, total: number): string {
-    const p = pct(covered, total);
-    const raw = `${p}%`.padStart(5);
-    const color = p >= 80 ? GREEN : p >= 60 ? YELLOW : RED;
-    return `${color}${raw}${RESET}`;
-  }
-
-  const entries = Object.entries(coverage)
-    .filter(([p]) => !p.includes(".test.") && !p.includes(".spec.") && !p.includes("node_modules"))
-    .sort(([a], [b]) => a.localeCompare(b));
-
-  if (entries.length === 0) {
-    console.log(`  ${DIM}no coverage data${RESET}`);
-    return;
-  }
-
-  const rows = entries.map(([path, fc]) => ({ path: rel(path, cwd), ...fileStats(fc) }));
-  const maxPathLen = Math.max(20, ...rows.map((r) => r.path.length));
-
-  const totals = rows.reduce(
-    (acc, r) => ({
-      stmts: acc.stmts + r.stmts,
-      stmtsCov: acc.stmtsCov + r.stmtsCov,
-      fns: acc.fns + r.fns,
-      fnsCov: acc.fnsCov + r.fnsCov,
-      branches: acc.branches + r.branches,
-      branchesCov: acc.branchesCov + r.branchesCov,
-    }),
-    { stmts: 0, stmtsCov: 0, fns: 0, fnsCov: 0, branches: 0, branchesCov: 0 },
-  );
-
-  const divider = `${DIM}${"─".repeat(maxPathLen + 22)}${RESET}`;
-  const header = `  ${DIM}${"File".padEnd(maxPathLen)}  Stmts  Branch    Fns${RESET}`;
-
-  console.log(`\n${CYAN}${BOLD}Coverage${RESET}`);
-  console.log(divider);
-  console.log(header);
-  for (const r of rows) {
-    console.log(
-      `  ${DIM}${r.path.padEnd(maxPathLen)}${RESET}  ${colorPct(r.stmtsCov, r.stmts)}  ${colorPct(r.branchesCov, r.branches)}  ${colorPct(r.fnsCov, r.fns)}`,
-    );
-  }
-  console.log(divider);
-  console.log(
-    `  ${"Total".padEnd(maxPathLen)}  ${colorPct(totals.stmtsCov, totals.stmts)}  ${colorPct(totals.branchesCov, totals.branches)}  ${colorPct(totals.fnsCov, totals.fns)}\n`,
-  );
+function renderResults(suites: SerializableTestSuite[], verbose = false, cwd = process.cwd()) {
+  const result = _renderResults(suites, verbose, cwd);
+  print(result.lines);
+  return result;
 }
 
 function printSummary(
   totalPass: number,
   totalFail: number,
   totalSkip: number,
+  totalFiles: number,
+  failFiles: number,
+  startTime: Date,
   durationMs?: number,
   cachedCount?: number,
+  opts?: { shard?: string; grep?: string; cacheCleared?: boolean },
 ) {
-  const total = totalPass + totalFail + totalSkip;
-  console.log(`\n${DIM}─────────────────────────────${RESET}`);
-  const parts: string[] = [];
-  if (totalPass) parts.push(`${GREEN}${totalPass} passed${RESET}`);
-  if (totalFail) parts.push(`${RED}${totalFail} failed${RESET}`);
-  if (totalSkip) parts.push(`${DIM}${totalSkip} skipped${RESET}`);
-  parts.push(`${DIM}${total} total${RESET}`);
-  if (durationMs !== undefined) parts.push(`${DIM}${formatDuration(durationMs)}${RESET}`);
-  if (cachedCount) parts.push(`${DIM}${cachedCount} cached${RESET}`);
-  console.log(` ${parts.join("  ")}\n`);
+  print(
+    renderSummary(
+      totalPass,
+      totalFail,
+      totalSkip,
+      totalFiles,
+      failFiles,
+      startTime,
+      durationMs,
+      cachedCount,
+      opts,
+    ),
+  );
+}
+
+function printCoverage(coverage: IstanbulCoverage, cwd: string) {
+  print(renderCoverage(coverage, cwd));
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -531,9 +349,12 @@ export async function runNode() {
   // ── --clear-cache ──────────────────────────────────────────────────────────
   if (clearCacheFlag) {
     clearCache(getCacheDir(cwd));
-    console.log(`${CYAN}${BOLD}FieldTest${RESET} ${DIM}cache cleared${RESET}`);
     const otherArgs = args.filter((a) => a !== "--clear-cache");
-    if (otherArgs.length === 0) return;
+    // If no other args, just confirm and exit. Otherwise the main header will note it.
+    if (otherArgs.length === 0) {
+      console.log(`${CYAN}${BOLD}FieldTest${RESET} ${DIM}cache cleared${RESET}`);
+      return;
+    }
   }
 
   // ── --merge-shards ─────────────────────────────────────────────────────────
@@ -547,14 +368,27 @@ export async function runNode() {
 
     const { suites, shards } = mergeShardResults(shardResults);
     console.log(
-      `\n${CYAN}${BOLD}FieldTest${RESET} ${DIM}merged ${shards.length} shard(s)${RESET}\n`,
+      `\n${CYAN}${BOLD}FieldTest${RESET} ${DIM}merged ${plural(shards.length, "shard")}${RESET}\n`,
     );
 
     const mergeStart = Date.now();
-    const { totalPass, totalFail, totalSkip } = renderResults(suites);
-    printSummary(totalPass, totalFail, totalSkip, Date.now() - mergeStart);
+    const mergeStartDate = new Date();
+    const mergedCwd = process.cwd();
+    const { totalPass, totalFail, totalSkip, totalFiles, failFiles } = renderResults(
+      suites,
+      false,
+      mergedCwd,
+    );
+    printSummary(
+      totalPass,
+      totalFail,
+      totalSkip,
+      totalFiles,
+      failFiles,
+      mergeStartDate,
+      Date.now() - mergeStart,
+    );
     process.exit(totalFail > 0 ? 1 : 0);
-    return;
   }
 
   // ── Watch mode ─────────────────────────────────────────────────────────────
@@ -579,7 +413,9 @@ export async function runNode() {
 
     const initial = (await glob(globPattern, { cwd })).map((f) => resolve(cwd, f));
     console.log(`\n${CYAN}${BOLD}FieldTest${RESET} ${DIM}watch${RESET}\n`);
-    console.log(`${DIM}watching src/  •  ${initial.length} test file(s) found${RESET}\n`);
+    console.log(
+      `${DIM}watching src/  •  ${plural(initial.length, "test file")} found  •  ctrl+c to stop${RESET}\n`,
+    );
     spawnRun(initial);
 
     watch(resolve(cwd, "src"), { recursive: true }, async (_, filename) => {
@@ -605,7 +441,11 @@ export async function runNode() {
         }
 
         process.stdout.write(
-          "\n" + renderDepTree(changedAbs, filesToRun, reason, graph, cwd) + "\n\n",
+          "\n" +
+            renderWatchSeparator() +
+            "\n" +
+            renderDepTree(changedAbs, filesToRun, reason, graph, cwd) +
+            "\n\n",
         );
         spawnRun(filesToRun);
       }, 120);
@@ -656,9 +496,8 @@ export async function runNode() {
     process.exit(0);
   }
 
-  const shardLabel = shard ? ` ${DIM}[shard ${shard.index}/${shard.total}]${RESET}` : "";
-  console.log(`\n${CYAN}${BOLD}FieldTest${RESET} ${DIM}node runner${RESET}${shardLabel}\n`);
-  const runStart = Date.now();
+  const runStartDate = new Date();
+  const runStart = runStartDate.getTime();
 
   // ── Build dep graph + cache lookup ─────────────────────────────────────────
   const graph = buildDepGraph(files);
@@ -698,57 +537,75 @@ export async function runNode() {
 
   if (cachedTestCount > 0) {
     console.log(
-      `  ${DIM}${cacheHits.length} file(s) cached  •  ${cacheMisses.length} to run${RESET}`,
+      `\n  ${DIM}${plural(cacheHits.length, "file")} cached  •  ${cacheMisses.length} to run${RESET} \n`,
     );
     for (const file of cacheMisses) {
       const reasons = cacheMissReasons.get(file);
       const why = reasons ? `  ${DIM}← ${reasons.join(", ")} changed${RESET}` : "";
       console.log(`  ${YELLOW}↺${RESET}  ${DIM}${rel(file, cwd)}${RESET}${why}`);
     }
-  } else {
-    console.log(`  ${DIM}${files.length} file(s)${RESET}`);
   }
 
-  // ── Run cache misses ───────────────────────────────────────────────────────
+  // ── Stream results ─────────────────────────────────────────────────────────
+  // Cached files print immediately; fresh files print as each one finishes.
   const freshSuites: SerializableTestSuite[] = [];
   let freshCoverage: IstanbulCoverage | null = null;
-  // Keyed by test file path; populated during the run, read after snapshot processing.
   const serializedByFile = new Map<string, SerializableTestSuite[]>();
 
-  if (cacheMisses.length > 0) {
-    // setCurrentSourceFile must be called before each import so suite.sourceFile
-    // is populated. Imports are sequential to avoid races on the shared global.
-    const { setCurrentSourceFile, runAll, store } = await import("@fieldtest/core");
+  // Print cached results immediately in original file order
+  for (const file of files) {
+    const cached = cacheHits.filter((s) => s.sourceFile === file);
+    if (cached.length > 0) print(_renderResults(cached, verboseFlag, cwd).lines);
+  }
 
-    for (const file of cacheMisses) {
+  // Run each cache-miss file and stream its result immediately
+  if (cacheMisses.length > 0) {
+    const { setCurrentSourceFile, runSuites, store, clearAllMocks } =
+      await import("@fieldtest/core");
+    const missTotal = cacheMisses.length;
+
+    for (let i = 0; i < cacheMisses.length; i++) {
+      const file = cacheMisses[i];
+
+      // Live progress indicator (overwritten on each iteration)
+      process.stdout.write(`\r\x1b[2K  ${DIM}running ${i + 1}/${missTotal}…${RESET}`);
+
+      const prevSuiteIds = new Set(store.getState().suites.map((s) => s.id));
+
       setCurrentSourceFile(file);
       await import(pathToFileURL(file).href);
-    }
-    setCurrentSourceFile(null);
+      setCurrentSourceFile(null);
 
-    await runAll({
-      grep: grepArg,
-      timeout: timeoutArg !== undefined ? parseInt(timeoutArg, 10) : undefined,
-    });
+      const newSuiteIds = store
+        .getState()
+        .suites.filter((s) => !prevSuiteIds.has(s.id))
+        .map((s) => s.id);
 
-    // NODE_V8_COVERAGE was set by the bin script before this process started,
-    // so all scripts are instrumented. Flush and convert now.
-    freshCoverage = await readNodeCoverage(resolve(cwd, "src"));
+      await runSuites(newSuiteIds, {
+        grep: grepArg,
+        timeout: timeoutArg !== undefined ? parseInt(timeoutArg, 10) : undefined,
+      });
 
-    const state = store.getState();
+      // Clear mocks registered by this file so they don't leak into the next file.
+      clearAllMocks();
 
-    // Serialize suites per file but do NOT write the cache yet — we need snapshot
-    // hashes, which we can only compute after processSnapshots writes the files.
-    for (const file of cacheMisses) {
-      const fileSuites = state.suites.filter((s) => s.sourceFile === file);
-      const serialized = fileSuites.map(serializeTestSuite);
+      // Clear the progress line and immediately print this file's result
+      process.stdout.write("\r\x1b[2K");
+
+      const updatedSuites = store.getState().suites.filter((s) => newSuiteIds.includes(s.id));
+      const serialized = updatedSuites.map(serializeTestSuite);
+
+      print(_renderResults(serialized, verboseFlag, cwd).lines);
+
       freshSuites.push(...serialized);
       serializedByFile.set(file, serialized);
     }
+
+    // NODE_V8_COVERAGE was set by the bin script before this process started.
+    freshCoverage = await readNodeCoverage(resolve(cwd, "src"));
   }
 
-  // ── Render results ─────────────────────────────────────────────────────────
-  // Preserve original file order: cached hits first (in file order), then fresh
+  // ── Compute aggregate totals (results already printed above) ───────────────
   const allSuites: SerializableTestSuite[] = [];
   for (const file of files) {
     const fromCache = cacheHits.filter((s) => s.sourceFile === file);
@@ -757,47 +614,14 @@ export async function runNode() {
   }
 
   // ── Snapshot persistence ───────────────────────────────────────────────────
-  {
-    // freshSuites controls which snapshots get written/updated.
-    // For the diff display we always compare allSuites so that cached failures
-    // still show their diffs even when 0 files were re-executed this run.
-    const suitesToCompare = updateSnapshots ? freshSuites : allSuites;
-    const { mismatches: snapshotMismatches, removed: snapshotRemoved } = processSnapshots(
-      allSuites,
-      updateSnapshots,
-      suitesToCompare,
-    );
-    if (snapshotRemoved.length > 0) {
-      console.log(
-        `\n${DIM}Removed ${snapshotRemoved.length} obsolete snapshot${snapshotRemoved.length === 1 ? "" : "s"}:${RESET}`,
-      );
-      for (const p of snapshotRemoved) {
-        console.log(`  ${DIM}− ${rel(p, cwd)}${RESET}`);
-      }
-    }
-    if (snapshotMismatches.length > 0) {
-      console.log(`\n${YELLOW}${BOLD}Snapshot mismatches (${snapshotMismatches.length}):${RESET}`);
-      for (const m of snapshotMismatches) {
-        console.log(`\n  ${BOLD}${m.suiteName} > ${m.testName} > ${m.label}${RESET}`);
-        console.log(`  ${DIM}${m.path}${RESET}`);
-        console.log(
-          m.diff
-            .split("\n")
-            .map((l) => {
-              if (l.startsWith("+")) return `  ${GREEN}${l}${RESET}`;
-              if (l.startsWith("-")) return `  ${RED}${l}${RESET}`;
-              return `  ${l}`;
-            })
-            .join("\n"),
-        );
-      }
-      console.log(`\n${DIM}Run with --update-snapshots to update stored snapshots.${RESET}\n`);
-    }
-  }
+  const suitesToCompare = updateSnapshots ? freshSuites : allSuites;
+  const { mismatches: snapshotMismatches, removed: snapshotRemoved } = processSnapshots(
+    allSuites,
+    updateSnapshots,
+    suitesToCompare,
+  );
 
-  // Write cache entries for all cache-miss files. This happens AFTER processSnapshots
-  // so we can record the snapshot file hashes and detect external snapshot updates
-  // (e.g. via the web UI) on the next run.
+  // Write cache entries after processSnapshots so snapshot hashes are current.
   if (serializedByFile.size > 0) {
     for (const file of cacheMisses) {
       const serialized = serializedByFile.get(file) ?? [];
@@ -829,32 +653,38 @@ export async function runNode() {
     }
   }
 
-  // When only some files were re-run, only show those results — the rest haven't changed.
-  // Summary totals still include everything.
-  const partialRun = cacheMisses.length > 0 && cacheHits.length > 0;
-  const { totalPass, totalFail, totalSkip } = renderResults(
-    partialRun ? freshSuites : allSuites,
+  // Compute totals from all suites (lines already printed per-file above)
+  const { totalPass, totalFail, totalSkip, totalFiles, failFiles } = _renderResults(
+    allSuites,
     verboseFlag,
+    cwd,
+  );
+  printSummary(
+    totalPass,
+    totalFail,
+    totalSkip,
+    totalFiles,
+    failFiles,
+    runStartDate,
+    Date.now() - runStart,
+    cachedTestCount,
+    {
+      shard: shard ? `${shard.index}/${shard.total}` : undefined,
+      grep: grepArg,
+      cacheCleared: clearCacheFlag,
+    },
   );
 
-  let summaryPass = totalPass,
-    summaryFail = totalFail,
-    summarySkip = totalSkip;
-  if (partialRun) {
-    summaryPass += cacheHits.reduce(
-      (n, s) => n + s.tests.filter((t) => t.status === "pass").length,
-      0,
-    );
-    summaryFail += cacheHits.reduce(
-      (n, s) => n + s.tests.filter((t) => t.status === "fail").length,
-      0,
-    );
-    summarySkip += cacheHits.reduce(
-      (n, s) => n + s.tests.filter((t) => t.status === "skipped").length,
-      0,
-    );
+  // ── Snapshot results (after summary) ──────────────────────────────────────
+  if (snapshotRemoved.length > 0) {
+    console.log(`\n${DIM}Removed ${plural(snapshotRemoved.length, "obsolete snapshot")}:${RESET}`);
+    for (const p of snapshotRemoved) {
+      console.log(`  ${DIM}− ${rel(p, cwd)}${RESET}`);
+    }
   }
-  printSummary(summaryPass, summaryFail, summarySkip, Date.now() - runStart, cachedTestCount);
+  if (snapshotMismatches.length > 0) {
+    print(renderSnapshotMismatches(snapshotMismatches, cwd, verboseFlag));
+  }
 
   // ── Coverage report ────────────────────────────────────────────────────────
   if (coverageFlag) {

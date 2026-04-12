@@ -500,8 +500,8 @@ async function runNodeTestFile(
 
 // ─── Mock transform helpers ───────────────────────────────────────────────────
 
-/** Inject __ftImport into an existing `import { ... } from '@fieldtest/core'` line */
-function injectVtImport(importText: string): string {
+/** Inject __ftImport into an existing `import { ... } from '<runtimePkg>'` line */
+function injectVtImport(importText: string, runtimePkg: string): string {
   if (importText.includes("__ftImport")) return importText;
   // Named import block: import { a, b } from '...'
   const braceMatch = importText.match(/\{([^}]*)\}/);
@@ -511,7 +511,7 @@ function injectVtImport(importText: string): string {
     return importText.replace(braceMatch[0], `{ ${updated} }`);
   }
   // Fallback: append a separate import
-  return importText + "\nimport { __ftImport } from '@fieldtest/core'";
+  return importText + `\nimport { __ftImport } from '${runtimePkg}'`;
 }
 
 interface ImportSpecifier {
@@ -547,7 +547,11 @@ function buildDynamicImport(specifiers: ImportSpecifier[], source: string): stri
 }
 
 /** Transform a test file: convert non-core static imports to __ftImport calls */
-async function transformTestFile(code: string, id: string): Promise<{ code: string } | null> {
+async function transformTestFile(
+  code: string,
+  id: string,
+  runtimePkg = "@fieldtest/core",
+): Promise<{ code: string } | null> {
   // Quick bail-out: only transform files that actually call mock()
   if (!code.includes("mock(")) return null;
 
@@ -586,7 +590,9 @@ async function transformTestFile(code: string, id: string): Promise<{ code: stri
 
   for (const node of allImports) {
     // After esbuild strips types, there are no `import type` declarations left
-    if (node.source.value === "@fieldtest/core") coreImports.push(node);
+    // Accept both the public package name and the internal one
+    if (node.source.value === runtimePkg || node.source.value === "@fieldtest/core")
+      coreImports.push(node);
     else otherImports.push(node);
   }
 
@@ -615,7 +621,7 @@ async function transformTestFile(code: string, id: string): Promise<{ code: stri
 
   // Core imports with __ftImport injected
   for (const node of coreImports) {
-    headerLines.push(injectVtImport(jsCode.slice(node.start, node.end)));
+    headerLines.push(injectVtImport(jsCode.slice(node.start, node.end), runtimePkg));
   }
 
   // Hoisted mock() calls
@@ -637,6 +643,7 @@ async function transformTestFile(code: string, id: string): Promise<{ code: stri
   }
 
   // Build the rest: everything after imports, skipping the hoisted mock() calls
+  const firstImportStart = allImports[0]?.start ?? 0;
   const lastImportEnd = Math.max(...allImports.map((n: any) => n.end));
   let restStart = lastImportEnd;
   if (jsCode[restStart] === "\n") restStart++;
@@ -655,20 +662,61 @@ async function transformTestFile(code: string, id: string): Promise<{ code: stri
   }
   restParts.push(jsCode.slice(cursor));
 
-  const newCode = headerLines.join("\n") + "\n" + restParts.join("");
+  // OXC (Vite's JSX dev transform) auto-injects `import { jsxDEV } from "react/jsx-dev-runtime"`
+  // at position 0, then places `var _jsxFileName = "..."` in the gap between that auto-import
+  // and the original file imports. Our reconstruction only emits import nodes (re-written) and
+  // code after the last import, so anything sandwiched between two imports gets silently dropped.
+  //
+  // Fix: collect non-import, non-mock top-level AST nodes that appear between imports and
+  // re-emit them after the rewritten import block. Also handle the rare case where something
+  // appears before the very first import (preamble).
+  const preamble = firstImportStart > 0 ? jsCode.slice(0, firstImportStart) : "";
+  const interstitial = (ast.body as any[])
+    .filter(
+      (n) =>
+        n.type !== "ImportDeclaration" &&
+        !mockCallRanges.has(n.start) &&
+        n.start >= firstImportStart &&
+        n.start < lastImportEnd,
+    )
+    .map((n) => jsCode.slice(n.start, n.end));
+
+  const newCode =
+    preamble +
+    headerLines.join("\n") +
+    "\n" +
+    (interstitial.length ? interstitial.join("\n") + "\n" : "") +
+    restParts.join("");
 
   return { code: newCode };
+}
+
+/** Detect which package name the consuming project uses for the fieldtest runtime. */
+function detectRuntimePkg(root: string): string {
+  try {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const all = { ...pkg.dependencies, ...pkg.devDependencies };
+    if ("fieldtest" in all) return "fieldtest";
+  } catch {
+    /* ignore — fall back to internal name */
+  }
+  return "@fieldtest/core";
 }
 
 export function fieldtest(options: FieldtestOptions = {}): Plugin {
   const { include = "src/**/*.test.{ts,tsx}", injectHtml = true } = options;
   let config: ResolvedConfig;
+  let runtimePkg = "@fieldtest/core";
 
   return {
     name: "fieldtest",
 
     configResolved(resolved) {
       config = resolved;
+      runtimePkg = detectRuntimePkg(resolved.root);
     },
 
     async transform(code, id) {
@@ -678,11 +726,11 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
       const needsNode = NODE_ENV_OVERRIDE_RE.test(code) || (await hasNodeBuiltinDep(code, id));
       if (needsNode) {
         return {
-          code: `import { __vtRegisterNodeTest } from '@fieldtest/core'\n__vtRegisterNodeTest(${JSON.stringify(id)})`,
+          code: `import { __vtRegisterNodeTest } from '${runtimePkg}'\n__vtRegisterNodeTest(${JSON.stringify(id)})`,
         };
       }
 
-      return transformTestFile(code, id);
+      return transformTestFile(code, id, runtimePkg);
     },
 
     configureServer(server) {
@@ -715,8 +763,8 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
 
     resolveId(id, _importer, options) {
       if (id === VIRTUAL_ID) return RESOLVED_ID;
-      // In SSR (Node) context, replace @fieldtest/core with a DOM-free stub
-      if (id === "@fieldtest/core" && options?.ssr) return SSR_CORE_ID;
+      // In SSR (Node) context, replace the runtime package with a DOM-free stub
+      if ((id === "@fieldtest/core" || id === runtimePkg) && options?.ssr) return SSR_CORE_ID;
     },
 
     load(id, options) {
@@ -735,7 +783,7 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
       const setupImport = setupFile ? `import '/${setupFile}'` : null;
 
       return [
-        `import { startApp, reloadFile } from '@fieldtest/core'`,
+        `import { startApp, reloadFile } from '${runtimePkg}'`,
         setupImport,
         previewImport,
         // Lazy glob — modules are loaded one at a time so sourceFile can be tracked
@@ -766,5 +814,84 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
           },
         ]
       : undefined,
+  };
+}
+
+// ─── Coverage plugin ──────────────────────────────────────────────────────────
+
+interface CoverageOptions {
+  /** Glob pattern(s) of files to instrument. @default "src/**\/*" */
+  include?: string | string[];
+  /** Patterns to exclude. Defaults exclude node_modules, test/spec files, .d.ts */
+  exclude?: string | string[];
+  /** Extensions to instrument. @default [".ts",".tsx",".js",".jsx"] */
+  extension?: string[];
+}
+
+const COVERAGE_EXCLUDE_RE = /node_modules|\.test\.[jt]sx?$|\.spec\.[jt]sx?$|\.d\.ts$/;
+const COVERAGE_EXT = new Set([".ts", ".tsx", ".js", ".jsx"]);
+
+// Lazy-loaded to avoid pulling istanbul-lib-instrument into non-coverage paths.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _createInstrumenter: ((opts: object) => any) | null | undefined;
+
+async function getCreateInstrumenter() {
+  if (_createInstrumenter !== undefined) return _createInstrumenter;
+  try {
+    const mod = await import("istanbul-lib-instrument");
+    _createInstrumenter = mod.createInstrumenter;
+  } catch {
+    _createInstrumenter = null;
+  }
+  return _createInstrumenter;
+}
+
+/**
+ * Vite plugin that instruments source files for Istanbul-compatible coverage
+ * using istanbul-lib-instrument directly — no Babel JSX/TS transforms, so no
+ * `_jsxFileName` injection. Vite's own OXC handles type-stripping and JSX after
+ * instrumentation.
+ */
+export function fieldtestCoverage(options: CoverageOptions = {}): Plugin {
+  const { extension = [".ts", ".tsx", ".js", ".jsx"] } = options;
+  const extSet = new Set(extension);
+
+  return {
+    name: "fieldtest-coverage",
+    apply: "serve",
+
+    async transform(code, id) {
+      // Strip query strings (e.g. ?t=123 from HMR)
+      const cleanId = id.split("?")[0];
+
+      if (COVERAGE_EXCLUDE_RE.test(cleanId)) return null;
+      if (cleanId.startsWith("\0")) return null; // virtual modules
+
+      const ext = cleanId.slice(cleanId.lastIndexOf("."));
+      if (!extSet.has(ext) && !COVERAGE_EXT.has(ext)) return null;
+
+      const createInstrumenter = await getCreateInstrumenter();
+      if (!createInstrumenter) return null;
+
+      // Use TypeScript + JSX parser plugins so istanbul can parse .ts/.tsx source.
+      // We do NOT run Babel's React JSX transform — only the instrumentation pass —
+      // so no `_jsxFileName` variable is injected. Vite's OXC handles JSX later.
+      const instrumenter = createInstrumenter({
+        esModules: true,
+        compact: false,
+        produceSourceMap: true,
+        autoWrap: false,
+        parserPlugins: ["typescript", "jsx"],
+      });
+
+      try {
+        const instrumented = instrumenter.instrumentSync(code, cleanId);
+        const map = instrumenter.lastSourceMap();
+        return { code: instrumented, map: map ?? null };
+      } catch {
+        // Parse/instrument failed (e.g. unsupported syntax) — leave file as-is
+        return null;
+      }
+    },
   };
 }

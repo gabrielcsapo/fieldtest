@@ -5,7 +5,7 @@
  * an `await __ftImport(...)` call, so the mock factory registered above it
  * takes effect before the import is resolved.
  */
-import { describe, it, expect, mock } from "@fieldtest/core";
+import { describe, it, expect, mock } from "fieldtest";
 import { getGreeting } from "./greeting";
 
 // ── Mock './greeting' so the time-of-day logic is predictable ────────────────

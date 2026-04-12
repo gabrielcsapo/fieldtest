@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import axe from "axe-core";
+import type {
+  VisionContrastReport,
+  VisionContrastResult,
+  ContrastViolation,
+} from "../cvd-contrast";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,6 +28,8 @@ const IMPACT_ORDER: Impact[] = ["critical", "serious", "moderate", "minor"];
 export interface AxePanelProps {
   containerRef: React.RefObject<HTMLElement | null>;
   runAxe?: () => Promise<axe.AxeResults>;
+  runVisionContrast?: () => Promise<VisionContrastReport>;
+  onVisionChange?: (vision: string) => void;
   active: boolean;
   onResults?: (violationCount: number) => void;
 }
@@ -53,9 +60,17 @@ function clearHighlight(els: Element[]) {
   });
 }
 
+type VisionState =
+  | { phase: "idle" }
+  | { phase: "running" }
+  | { phase: "done"; results: VisionContrastResult[] }
+  | { phase: "error"; message: string };
+
 export function AxePanel({
   containerRef,
   runAxe,
+  runVisionContrast,
+  onVisionChange,
   active,
   onResults,
 }: AxePanelProps): React.ReactElement | null {
@@ -63,6 +78,55 @@ export function AxePanel({
   const [activeViolationId, setActiveViolationId] = useState<string | null>(null);
   const [passesExpanded, setPassesExpanded] = useState(false);
   const highlightedEls = useRef<Element[]>([]);
+  const [visionState, setVisionState] = useState<VisionState>({ phase: "idle" });
+  const [expandedVision, setExpandedVision] = useState<string | null>(null);
+  const [activeVisionItem, setActiveVisionItem] = useState<{
+    visionKey: string;
+    idx: number;
+  } | null>(null);
+
+  function handleVisionViolationClick(visionKey: string, idx: number, selector: string) {
+    clearHighlight(highlightedEls.current);
+    const isAlreadyActive =
+      activeVisionItem?.visionKey === visionKey && activeVisionItem?.idx === idx;
+    if (isAlreadyActive) {
+      highlightedEls.current = [];
+      setActiveVisionItem(null);
+      return;
+    }
+    // Set the vision filter in the toolbar
+    onVisionChange?.(visionKey);
+    // Highlight the element inside displayRoot (containerRef)
+    const container = containerRef.current;
+    if (container && selector) {
+      const searchRoot = container.ownerDocument ?? document;
+      try {
+        const found = container.querySelector(selector) ?? searchRoot.querySelector(selector);
+        if (found) {
+          applyHighlight([found], "#f87171");
+          highlightedEls.current = [found];
+          found.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+      } catch {
+        /* invalid selector */
+      }
+    }
+    setActiveVisionItem({ visionKey, idx });
+  }
+
+  function handleRunVisionContrast() {
+    if (!runVisionContrast) return;
+    setVisionState({ phase: "running" });
+    setExpandedVision(null);
+    runVisionContrast()
+      .then((report) => setVisionState({ phase: "done", results: report.results }))
+      .catch((err: unknown) =>
+        setVisionState({
+          phase: "error",
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+  }
 
   // Clear highlights when tab becomes inactive or component unmounts
   useEffect(() => {
@@ -288,6 +352,203 @@ export function AxePanel({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Vision simulation contrast */}
+      {runVisionContrast && (
+        <div style={{ marginTop: 12, borderTop: "1px solid #1a1a24", paddingTop: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 10,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#4b4b60",
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+              }}
+            >
+              Vision Simulation
+            </div>
+            <button
+              onClick={handleRunVisionContrast}
+              disabled={visionState.phase === "running"}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "4px 10px",
+                borderRadius: 5,
+                border: "1px solid #2a2a36",
+                background:
+                  visionState.phase === "running" ? "transparent" : "rgba(99,102,241,0.12)",
+                color: visionState.phase === "running" ? "#4b4b60" : "#a5b4fc",
+                cursor: visionState.phase === "running" ? "default" : "pointer",
+              }}
+            >
+              {visionState.phase === "running" ? "Running…" : "Run contrast check"}
+            </button>
+          </div>
+
+          {visionState.phase === "idle" && (
+            <div style={{ fontSize: 11, color: "#4b4b60" }}>
+              Checks WCAG AA text contrast for 8 color vision deficiencies.
+            </div>
+          )}
+
+          {visionState.phase === "error" && (
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: 6,
+                background: "rgba(239,68,68,0.1)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                fontSize: 12,
+                color: "#fca5a5",
+                fontFamily: "monospace",
+              }}
+            >
+              {visionState.message}
+            </div>
+          )}
+
+          {visionState.phase === "done" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {visionState.results.map((result) => {
+                const hasViolations = result.violations.length > 0;
+                const isExpanded = expandedVision === result.visionKey;
+                return (
+                  <div key={result.visionKey}>
+                    <button
+                      onClick={() =>
+                        hasViolations
+                          ? setExpandedVision(isExpanded ? null : result.visionKey)
+                          : undefined
+                      }
+                      style={{
+                        width: "100%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "6px 10px",
+                        borderRadius: isExpanded ? "6px 6px 0 0" : 6,
+                        border: `1px solid ${hasViolations ? "rgba(239,68,68,0.25)" : "rgba(34,197,94,0.15)"}`,
+                        background: isExpanded
+                          ? "rgba(239,68,68,0.07)"
+                          : hasViolations
+                            ? "rgba(239,68,68,0.05)"
+                            : "rgba(34,197,94,0.04)",
+                        cursor: hasViolations ? "pointer" : "default",
+                        textAlign: "left",
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: "#c4c4d4" }}>{result.label}</span>
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: "2px 7px",
+                          borderRadius: 10,
+                          background: hasViolations
+                            ? "rgba(239,68,68,0.15)"
+                            : "rgba(34,197,94,0.12)",
+                          color: hasViolations ? "#f87171" : "#22c55e",
+                          letterSpacing: "0.04em",
+                        }}
+                      >
+                        {hasViolations ? `${result.violations.length} fail` : "pass"}
+                      </span>
+                    </button>
+
+                    {isExpanded && (
+                      <div
+                        style={{
+                          border: "1px solid rgba(239,68,68,0.25)",
+                          borderTop: "none",
+                          borderRadius: "0 0 6px 6px",
+                          background: "#0f0f13",
+                          padding: "8px 10px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6,
+                        }}
+                      >
+                        {result.violations.map((v: ContrastViolation, i: number) => {
+                          const isActive =
+                            activeVisionItem?.visionKey === result.visionKey &&
+                            activeVisionItem?.idx === i;
+                          return (
+                            <div
+                              key={i}
+                              onClick={() =>
+                                handleVisionViolationClick(result.visionKey, i, v.selector)
+                              }
+                              style={{
+                                fontSize: 11,
+                                borderRadius: 4,
+                                border: `1px solid ${isActive ? "rgba(248,113,113,0.5)" : "#1e1e2e"}`,
+                                overflow: "hidden",
+                                cursor: "pointer",
+                                background: isActive ? "rgba(248,113,113,0.06)" : "transparent",
+                                transition: "border-color 0.15s, background 0.15s",
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontFamily: "monospace",
+                                  color: "#6b7280",
+                                  padding: "4px 8px",
+                                  background: isActive ? "rgba(248,113,113,0.08)" : "#1a1a24",
+                                  whiteSpace: "pre",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                                title={v.html}
+                              >
+                                {v.html.length > 80 ? v.html.slice(0, 77) + "…" : v.html}
+                              </div>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  gap: 12,
+                                  padding: "4px 8px",
+                                  color: "#4b4b60",
+                                }}
+                              >
+                                <span>
+                                  original{" "}
+                                  <span
+                                    style={{
+                                      color:
+                                        v.originalContrast >= v.required ? "#22c55e" : "#f87171",
+                                    }}
+                                  >
+                                    {v.originalContrast}:1
+                                  </span>
+                                </span>
+                                <span>→</span>
+                                <span>
+                                  simulated{" "}
+                                  <span style={{ color: "#f87171" }}>{v.simulatedContrast}:1</span>
+                                </span>
+                                <span style={{ marginLeft: "auto" }}>need {v.required}:1</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

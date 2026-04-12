@@ -17,7 +17,8 @@
       "@demo/preview": ["./demo-app/.fieldtest/preview.tsx"],
       "@demo/setup": ["./demo-app/.fieldtest/setup.ts"],
       "@demo/globals": ["./demo-app/src/globals.css"],
-      "@fieldtest/core/ui": ["../../packages/core/src/ui/FieldtestDemo.tsx"]
+      "@fieldtest/core/ui": ["../../packages/core/src/ui/FieldtestDemo.tsx"],
+      "@fieldtest/runner/render": ["../../packages/runner/src/render.ts"]
     }
   },
   "include": ["src"]

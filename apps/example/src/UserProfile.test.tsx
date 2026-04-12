@@ -1,4 +1,4 @@
-import { act, describe, it, render } from "@fieldtest/core";
+import { act, describe, it, render } from "fieldtest";
 import { http, HttpResponse } from "msw";
 import { worker } from "../.fieldtest/setup";
 import { UserProfile } from "./UserProfile";

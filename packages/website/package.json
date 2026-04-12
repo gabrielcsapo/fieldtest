@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@fieldtest/core": "workspace:*",
+    "@fieldtest/runner": "workspace:*",
     "fuse.js": "^7.3.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

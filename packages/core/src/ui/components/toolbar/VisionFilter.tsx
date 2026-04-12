@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 export type VisionFilter =
   | "none"
@@ -131,16 +132,35 @@ export interface VisionFilterProps {
 
 export function VisionFilter({ value, onChange }: VisionFilterProps) {
   const [open, setOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        ref.current &&
+        !ref.current.contains(target) &&
+        popoverRef.current &&
+        !popoverRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
+
+  const handleOpen = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    }
+    setOpen((o) => !o);
+  };
 
   const isActive = value !== "none";
 
@@ -150,7 +170,8 @@ export function VisionFilter({ value, onChange }: VisionFilterProps) {
       <div ref={ref} style={{ position: "relative" }}>
         {/* Trigger button */}
         <button
-          onClick={() => setOpen((o) => !o)}
+          ref={btnRef}
+          onClick={handleOpen}
           title="Vision simulation"
           style={{
             background: isActive ? "rgba(99,102,241,0.2)" : "transparent",
@@ -175,101 +196,106 @@ export function VisionFilter({ value, onChange }: VisionFilterProps) {
           </svg>
         </button>
 
-        {/* Popover */}
-        {open && (
-          <div
-            style={{
-              position: "absolute",
-              top: "calc(100% + 8px)",
-              right: 0,
-              background: "#1a1a24",
-              border: "1px solid #2a2a36",
-              borderRadius: 10,
-              overflow: "hidden",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-              minWidth: 240,
-              zIndex: 100,
-            }}
-          >
-            {(Object.keys(FILTERS) as VisionFilter[]).map((key, i) => {
-              const def = FILTERS[key];
-              const isSelected = key === value;
-              const isReset = key === "none";
-              return (
-                <button
-                  key={key}
-                  onClick={() => {
-                    onChange(key);
-                    setOpen(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "10px 14px",
-                    background: isSelected ? "rgba(99,102,241,0.15)" : "transparent",
-                    border: "none",
-                    borderTop: isReset || i === 0 ? "none" : "1px solid #1e1e2e",
-                    cursor: "pointer",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected)
-                      (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.04)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected)
-                      (e.currentTarget as HTMLElement).style.background = "transparent";
-                  }}
-                >
-                  {isReset ? (
-                    <svg
-                      width="20"
-                      height="20"
-                      viewBox="0 0 20 20"
-                      fill="none"
-                      style={{ flexShrink: 0 }}
-                    >
-                      <path
-                        d="M10 4a6 6 0 1 0 5.66 4H14a4 4 0 1 1-4-4V2l3 3-3 3V6a6 6 0 0 0-6 6"
-                        stroke="#6b7280"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M10 4V2l3 3-3 3"
-                        stroke="#6b7280"
-                        strokeWidth="1.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  ) : (
-                    <ColorBall filter={key} size={20} />
-                  )}
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: isSelected ? "#a5b4fc" : "#c4c4d4",
-                      }}
-                    >
-                      {def.label}
-                    </div>
-                    {def.prevalence && (
-                      <div style={{ fontSize: 11, color: "#4b4b60", marginTop: 1 }}>
-                        {def.prevalence}
-                      </div>
+        {/* Popover — rendered in a portal to escape overflow:auto clipping on the toolbar */}
+        {open &&
+          dropdownPos &&
+          createPortal(
+            <div
+              ref={popoverRef}
+              style={{
+                position: "fixed",
+                top: dropdownPos.top,
+                right: dropdownPos.right,
+                background: "#1a1a24",
+                border: "1px solid #2a2a36",
+                borderRadius: 10,
+                overflow: "hidden",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                minWidth: 240,
+                zIndex: 9999,
+              }}
+            >
+              {(Object.keys(FILTERS) as VisionFilter[]).map((key, i) => {
+                const def = FILTERS[key];
+                const isSelected = key === value;
+                const isReset = key === "none";
+                return (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      onChange(key);
+                      setOpen(false);
+                    }}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 14px",
+                      background: isSelected ? "rgba(99,102,241,0.15)" : "transparent",
+                      border: "none",
+                      borderTop: isReset || i === 0 ? "none" : "1px solid #1e1e2e",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected)
+                        (e.currentTarget as HTMLElement).style.background =
+                          "rgba(255,255,255,0.04)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected)
+                        (e.currentTarget as HTMLElement).style.background = "transparent";
+                    }}
+                  >
+                    {isReset ? (
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <path
+                          d="M10 4a6 6 0 1 0 5.66 4H14a4 4 0 1 1-4-4V2l3 3-3 3V6a6 6 0 0 0-6 6"
+                          stroke="#6b7280"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M10 4V2l3 3-3 3"
+                          stroke="#6b7280"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <ColorBall filter={key} size={20} />
                     )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )}
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 500,
+                          color: isSelected ? "#a5b4fc" : "#c4c4d4",
+                        }}
+                      >
+                        {def.label}
+                      </div>
+                      {def.prevalence && (
+                        <div style={{ fontSize: 11, color: "#4b4b60", marginTop: 1 }}>
+                          {def.prevalence}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>,
+            document.body,
+          )}
       </div>
     </>
   );

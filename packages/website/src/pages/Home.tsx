@@ -4,8 +4,278 @@ import Nav from "../components/Nav";
 import Logo from "../components/Logo";
 import { getHighlighter, highlight as shikiHighlight } from "../lib/highlighter";
 import type { Highlighter } from "shiki";
+import { BrowserWindow, CodeWindow, TerminalWindow } from "../components/ChromeWindow";
+import { renderResults, renderSummary, renderCoverage } from "@fieldtest/runner/render";
 
 const DEMO_SRC = `${import.meta.env.BASE_URL}demo-ui/index.html`;
+
+// ─── Terminal preview ──────────────────────────────────────────────────────────
+
+function ansiToHtml(text: string): string {
+  const colorMap: Record<string, string> = {
+    "32": "#74c69d", // GREEN
+    "31": "#f87171", // RED
+    "33": "#fbbf24", // YELLOW
+    "36": "#67e8f9", // CYAN
+    "2": "#6b7280", // DIM
+  };
+  const stack: string[] = [];
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\x1b\[(\d+)m/g, (_, code) => {
+      if (code === "0" || code === "22") {
+        const closes = stack
+          .splice(0)
+          .map(() => "</span>")
+          .join("");
+        return closes;
+      }
+      if (code === "1") return ""; // bold — skip
+      const color = colorMap[code];
+      if (color) {
+        stack.push(code);
+        return `<span style="color:${color}">`;
+      }
+      return "";
+    });
+}
+
+const _mockSuites = [
+  {
+    id: "s1",
+    name: "Button",
+    sourceFile: "/project/src/Button.test.tsx",
+    status: "fail" as const,
+    duration: 34,
+    tests: [
+      {
+        id: "t1",
+        name: "renders label",
+        suiteId: "s1",
+        suiteName: "Button",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+      {
+        id: "t2",
+        name: "primary variant",
+        suiteId: "s1",
+        suiteName: "Button",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+      {
+        id: "t3",
+        name: "fires onClick",
+        suiteId: "s1",
+        suiteName: "Button",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+      {
+        id: "t4",
+        name: "wrong label",
+        suiteId: "s1",
+        suiteName: "Button",
+        status: "fail" as const,
+        error: 'Expected "Save" · Received "Submit"',
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+    ],
+  },
+  {
+    id: "s2",
+    name: "Card",
+    sourceFile: "/project/src/Card.test.tsx",
+    status: "pass" as const,
+    duration: 19,
+    tests: [
+      {
+        id: "t5",
+        name: "renders title",
+        suiteId: "s2",
+        suiteName: "Card",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+      {
+        id: "t6",
+        name: "renders description",
+        suiteId: "s2",
+        suiteName: "Card",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+      {
+        id: "t7",
+        name: "renders image",
+        suiteId: "s2",
+        suiteName: "Card",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+    ],
+  },
+  {
+    id: "s3",
+    name: "UserProfile",
+    sourceFile: "/project/src/UserProfile.test.tsx",
+    status: "pass" as const,
+    duration: 27,
+    tests: [
+      {
+        id: "t8",
+        name: "shows avatar",
+        suiteId: "s3",
+        suiteName: "UserProfile",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+      {
+        id: "t9",
+        name: "shows display name",
+        suiteId: "s3",
+        suiteName: "UserProfile",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+      {
+        id: "t10",
+        name: "shows bio",
+        suiteId: "s3",
+        suiteName: "UserProfile",
+        status: "pass" as const,
+        assertions: [],
+        snapshots: [],
+        consoleLogs: [],
+        testCoverage: null,
+      },
+    ],
+  },
+];
+
+// Build mock Istanbul coverage: mkCov(covered, total) for stmts/branches/fns
+function _mkCov(covered: number, total: number): [Record<string, number>, Record<string, unknown>] {
+  const hits: Record<string, number> = {};
+  const map: Record<string, unknown> = {};
+  for (let i = 0; i < total; i++) {
+    hits[i] = i < covered ? 1 : 0;
+    map[i] = { start: { line: i + 1, column: 0 }, end: { line: i + 1, column: 10 } };
+  }
+  return [hits, map];
+}
+function _mkBranch(
+  covered: number,
+  total: number,
+): [Record<string, number[]>, Record<string, unknown>] {
+  const hits: Record<string, number[]> = {};
+  const map: Record<string, unknown> = {};
+  for (let i = 0; i < total; i++) {
+    hits[i] = [i < covered ? 1 : 0, 1];
+    map[i] = { locations: [] };
+  }
+  return [hits, map];
+}
+
+const [bS, bSM] = _mkCov(15, 16);
+const [bB, bBM] = _mkBranch(6, 7);
+const [bF, bFM] = _mkCov(4, 4);
+const [cS, cSM] = _mkCov(10, 10);
+const [cB, cBM] = _mkBranch(4, 4);
+const [cF, cFM] = _mkCov(3, 3);
+const [uS, uSM] = _mkCov(12, 12);
+const [uB, uBM] = _mkBranch(5, 6);
+const [uF, uFM] = _mkCov(3, 3);
+
+const _mockCoverage = {
+  "/project/src/Button.tsx": {
+    path: "/project/src/Button.tsx",
+    s: bS,
+    b: bB,
+    f: bF,
+    statementMap: bSM,
+    branchMap: bBM,
+    fnMap: bFM,
+  },
+  "/project/src/Card.tsx": {
+    path: "/project/src/Card.tsx",
+    s: cS,
+    b: cB,
+    f: cF,
+    statementMap: cSM,
+    branchMap: cBM,
+    fnMap: cFM,
+  },
+  "/project/src/UserProfile.tsx": {
+    path: "/project/src/UserProfile.tsx",
+    s: uS,
+    b: uB,
+    f: uF,
+    statementMap: uSM,
+    branchMap: uBM,
+    fnMap: uFM,
+  },
+};
+
+const {
+  lines: _resultLines,
+  totalPass,
+  totalFail,
+  totalSkip,
+  totalFiles,
+  failFiles,
+} = renderResults(_mockSuites, false, "/project");
+const _summaryLines = renderSummary(
+  totalPass,
+  totalFail,
+  totalSkip,
+  totalFiles,
+  failFiles,
+  new Date("2024-01-01T09:15:42"),
+  80,
+  undefined,
+  { shard: "1/4" },
+);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _coverageLines = renderCoverage(_mockCoverage as any, "/project");
+const TERMINAL_OUTPUT = [
+  "$ fieldtest --coverage --shard=1/4",
+  "",
+  ..._resultLines,
+  ..._summaryLines,
+  ..._coverageLines,
+].join("\n");
+
+// ──────────────────────────────────────────────────────────────────────────────
 
 let _hl: Highlighter | null = null;
 
@@ -212,8 +482,11 @@ const features = [
 export default function Home() {
   const [codeHtml, setCodeHtml] = useState<string | null>(null);
   const [heroExpanded, setHeroExpanded] = useState(false);
+  const [dualExpanded, setDualExpanded] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const placeholderRef = useRef<HTMLDivElement>(null);
+  const dualIframeRef = useRef<HTMLIFrameElement>(null);
+  const dualPlaceholderRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     const iframe = iframeRef.current;
@@ -260,6 +533,52 @@ export default function Home() {
       window.removeEventListener("scroll", update);
     };
   }, [heroExpanded]);
+
+  useLayoutEffect(() => {
+    const iframe = dualIframeRef.current;
+    const placeholder = dualPlaceholderRef.current;
+    if (!iframe) return;
+
+    const update = () => {
+      const CHROME_H = 36;
+      if (dualExpanded) {
+        iframe.style.cssText = [
+          "position:fixed",
+          `top:${window.innerHeight * 0.1 + CHROME_H}px`,
+          `left:${window.innerWidth * 0.1}px`,
+          `width:${window.innerWidth * 0.8}px`,
+          `height:${window.innerHeight * 0.8 - CHROME_H}px`,
+          "border:none",
+          "display:block",
+          "z-index:1000",
+          "border-radius:0 0 10px 10px",
+        ].join(";");
+      } else if (placeholder) {
+        const rect = placeholder.getBoundingClientRect();
+        iframe.style.cssText = [
+          "position:fixed",
+          `top:${rect.top}px`,
+          `left:${rect.left}px`,
+          `width:${rect.width}px`,
+          `height:${rect.height}px`,
+          "border:none",
+          "display:block",
+          "z-index:11",
+        ].join(";");
+      }
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    if (placeholder) ro.observe(placeholder);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, { passive: true });
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update);
+    };
+  }, [dualExpanded]);
 
   useEffect(() => {
     if (_hl) {
@@ -325,83 +644,13 @@ export default function Home() {
                       "radial-gradient(ellipse at 40% 50%, rgba(99,102,241,0.13) 0%, transparent 70%)",
                   }}
                 />
-                <div
-                  className="overflow-hidden rounded-2xl shadow-[0_30px_80px_rgba(0,0,0,0.7)]"
-                  style={{ border: "1px solid #2a2a36" }}
+                <BrowserWindow
+                  style={{ borderRadius: 16, boxShadow: "0 30px 80px rgba(0,0,0,0.7)" }}
+                  onExpand={() => setHeroExpanded(true)}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 14px",
-                      borderBottom: "1px solid #2a2a36",
-                      background: "#0f0f13",
-                      position: "relative",
-                      zIndex: 12,
-                    }}
-                  >
-                    <div style={{ display: "flex", gap: 6 }}>
-                      {["#ff5f57", "#febc2e", "#28c840"].map((c) => (
-                        <div
-                          key={c}
-                          style={{ width: 11, height: 11, borderRadius: "50%", background: c }}
-                        />
-                      ))}
-                    </div>
-                    <div
-                      style={{
-                        flex: 1,
-                        textAlign: "center",
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 11,
-                        color: "#6b7280",
-                      }}
-                    >
-                      localhost:3333 — fieldtest
-                    </div>
-                    <button
-                      onClick={() => setHeroExpanded(true)}
-                      title="Expand preview"
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 5,
-                        border: "1px solid #2a2a36",
-                        background: "transparent",
-                        color: "#6b7280",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.borderColor =
-                          "rgba(99,102,241,0.6)";
-                        (e.currentTarget as HTMLButtonElement).style.color = "#a5b4fc";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLButtonElement).style.borderColor = "#2a2a36";
-                        (e.currentTarget as HTMLButtonElement).style.color = "#6b7280";
-                      }}
-                    >
-                      <svg
-                        width="11"
-                        height="11"
-                        viewBox="0 0 12 12"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                      >
-                        <path d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3" />
-                      </svg>
-                    </button>
-                  </div>
                   {/* Placeholder — iframe is overlaid here via useLayoutEffect */}
                   <div ref={placeholderRef} style={{ width: "100%", height: "580px" }} />
-                </div>
+                </BrowserWindow>
 
                 {/* Backdrop when expanded */}
                 {heroExpanded && (
@@ -416,9 +665,10 @@ export default function Home() {
                   />
                 )}
 
-                {/* Expanded chrome frame (just the header bar + collapse button) */}
+                {/* Expanded chrome frame — title bar only, no content */}
                 {heroExpanded && (
-                  <div
+                  <BrowserWindow
+                    onCollapse={() => setHeroExpanded(false)}
                     style={{
                       position: "fixed",
                       top: "10vh",
@@ -426,71 +676,12 @@ export default function Home() {
                       width: "80vw",
                       zIndex: 1001,
                       borderRadius: "10px 10px 0 0",
-                      overflow: "hidden",
-                      border: "1px solid #2a2a36",
                       borderBottom: "none",
                       boxShadow: "0 0 0 4px rgba(99,102,241,0.06), 0 24px 64px rgba(0,0,0,0.6)",
                     }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        padding: "10px 14px",
-                        background: "#0f0f13",
-                      }}
-                    >
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {["#ff5f57", "#febc2e", "#28c840"].map((c) => (
-                          <div
-                            key={c}
-                            style={{ width: 11, height: 11, borderRadius: "50%", background: c }}
-                          />
-                        ))}
-                      </div>
-                      <div
-                        style={{
-                          flex: 1,
-                          textAlign: "center",
-                          fontFamily: "var(--font-mono)",
-                          fontSize: 11,
-                          color: "#6b7280",
-                        }}
-                      >
-                        localhost:3333 — fieldtest
-                      </div>
-                      <button
-                        onClick={() => setHeroExpanded(false)}
-                        title="Collapse preview"
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: 5,
-                          border: "1px solid rgba(99,102,241,0.4)",
-                          background: "rgba(99,102,241,0.15)",
-                          color: "#a5b4fc",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <svg
-                          width="11"
-                          height="11"
-                          viewBox="0 0 12 12"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                        >
-                          <path d="M4.5 1.5H1.5v3M7.5 1.5h3v3M4.5 10.5H1.5v-3M7.5 10.5h3v-3" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
+                    <></>
+                  </BrowserWindow>
                 )}
 
                 {/* Expanded border/shadow frame around the iframe */}
@@ -693,15 +884,7 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-white/7 bg-ft-bg">
-              <div className="flex items-center gap-2.5 border-b border-white/7 bg-ft-surface px-4 py-2.5">
-                <div className="flex gap-1.5">
-                  <div className="h-[11px] w-[11px] rounded-full bg-[#ff5f57]" />
-                  <div className="h-[11px] w-[11px] rounded-full bg-[#febc2e]" />
-                  <div className="h-[11px] w-[11px] rounded-full bg-[#28c840]" />
-                </div>
-                <span className="font-mono text-xs text-ft-dim">Button.test.tsx</span>
-              </div>
+            <CodeWindow filename="Button.test.tsx">
               {codeHtml ? (
                 <div
                   className="overflow-x-auto [&_.shiki]:!bg-transparent [&_.shiki]:p-6 [&_.shiki_code]:!text-[13px] [&_.shiki_code]:!leading-[1.75]"
@@ -712,7 +895,7 @@ export default function Home() {
                   <code>{BUTTON_TEST_CODE}</code>
                 </pre>
               )}
-            </div>
+            </CodeWindow>
           </div>
         </section>
 
@@ -744,6 +927,70 @@ export default function Home() {
                     <div className="font-mono text-xs text-ft-dim">fieldtest --ui</div>
                   </div>
                 </div>
+                {/* Fixed iframe — repositioned by useLayoutEffect */}
+                <iframe
+                  ref={dualIframeRef}
+                  src={DEMO_SRC}
+                  title="fieldtest browser UI"
+                  style={{
+                    position: "fixed",
+                    width: 0,
+                    height: 0,
+                    border: "none",
+                    display: "block",
+                    zIndex: 1,
+                  }}
+                />
+                <div className="mx-4 mt-4">
+                  <BrowserWindow onExpand={() => setDualExpanded(true)}>
+                    <div ref={dualPlaceholderRef} style={{ width: "100%", height: 280 }} />
+                  </BrowserWindow>
+                </div>
+
+                {dualExpanded && (
+                  <div
+                    onClick={() => setDualExpanded(false)}
+                    style={{
+                      position: "fixed",
+                      inset: 0,
+                      background: "rgba(0,0,0,0.75)",
+                      zIndex: 999,
+                    }}
+                  />
+                )}
+                {dualExpanded && (
+                  <BrowserWindow
+                    onCollapse={() => setDualExpanded(false)}
+                    style={{
+                      position: "fixed",
+                      top: "10vh",
+                      left: "10vw",
+                      width: "80vw",
+                      zIndex: 1001,
+                      borderRadius: "10px 10px 0 0",
+                      borderBottom: "none",
+                      boxShadow: "0 0 0 4px rgba(99,102,241,0.06), 0 24px 64px rgba(0,0,0,0.6)",
+                    }}
+                  >
+                    <></>
+                  </BrowserWindow>
+                )}
+                {dualExpanded && (
+                  <div
+                    style={{
+                      position: "fixed",
+                      top: "10vh",
+                      left: "10vw",
+                      width: "80vw",
+                      height: "80vh",
+                      zIndex: 999,
+                      borderRadius: 10,
+                      border: "1px solid #2a2a36",
+                      boxShadow: "0 0 0 4px rgba(99,102,241,0.06), 0 24px 64px rgba(0,0,0,0.6)",
+                      pointerEvents: "none",
+                    }}
+                  />
+                )}
                 <ul className="flex flex-col gap-3 px-6 py-5">
                   {[
                     "Filmstrip snapshots at every render step",
@@ -773,25 +1020,13 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-                <div className="m-6 overflow-hidden rounded-xl border border-white/7 bg-ft-bg">
-                  <div className="flex gap-1.5 border-b border-white/7 px-3.5 py-2.5">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-2.5 w-2.5 rounded-full bg-[#3d5a47]" />
-                    ))}
-                  </div>
-                  <pre className="p-4 font-mono text-[12px] leading-[1.7] text-ft-mid whitespace-pre-wrap">
-                    {`$ fieldtest --coverage
-
-\x1b[32m✓\x1b[0m Button › renders label         12ms
-\x1b[32m✓\x1b[0m Button › primary variant         8ms
-\x1b[32m✓\x1b[0m Button › fires onClick          14ms
-\x1b[31m✗\x1b[0m Button › wrong label
-  Expected "Save" · Received "Submit"
-
-─────────────────────────────────
-7 passed  1 failed  42ms
-Coverage: 94.2% stmts  88.6% branches`}
-                  </pre>
+                <div className="m-6">
+                  <TerminalWindow>
+                    <pre
+                      className="p-4 font-mono text-[12px] leading-[1.7] text-ft-mid whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ __html: ansiToHtml(TERMINAL_OUTPUT) }}
+                    />
+                  </TerminalWindow>
                 </div>
                 <ul className="flex flex-col gap-3 px-6 pb-5">
                   {[

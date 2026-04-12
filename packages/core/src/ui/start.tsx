@@ -108,7 +108,7 @@ export async function startApp(
     // Minimal reset so only the component shows, with transparent background and flex centering
     Object.assign(document.documentElement.style, {
       background: "transparent",
-      overflow: "visible",
+      overflow: "auto",
       height: "100%",
     });
     Object.assign(document.body.style, {
@@ -124,6 +124,10 @@ export async function startApp(
     const displayRoot = document.createElement("div");
     displayRoot.id = "__vt_display_root__";
     document.body.appendChild(displayRoot);
+
+    // Component tree captured after each render, before any after-display hooks
+    // (which may call RTL cleanup and destroy the fiber).
+    let _capturedTree: ComponentTreeResult = [];
 
     async function showTest(
       suiteName: string,
@@ -157,6 +161,8 @@ export async function startApp(
       // unmatched requests get Vite's SPA fallback (index.html) instead of JSON.
       if (fallbackHtml) {
         container.innerHTML = fallbackHtml;
+        // No React fiber when rendering from HTML — leave _capturedTree as-is from
+        // the previous live render so the trace tab still shows something.
         await runAfterDisplayHooks();
         return true;
       }
@@ -175,6 +181,9 @@ export async function startApp(
         setRenderTarget(null);
         setStopAfterFirstRender(false);
         await runAfterTestHooks();
+        // Capture BEFORE after-display hooks — hooks may call RTL cleanup() which
+        // unmounts React and destroys the fiber, making getComponentTree() return [].
+        _capturedTree = scanComponentTree();
         await runAfterDisplayHooks();
       }
 
@@ -206,6 +215,8 @@ export async function startApp(
         setRenderTarget(null);
         setPlayDelay(0);
         await runAfterTestHooks();
+        // Capture BEFORE after-display hooks — same timing issue as showTest.
+        _capturedTree = scanComponentTree();
         await runAfterDisplayHooks();
       }
 
@@ -215,6 +226,11 @@ export async function startApp(
     async function runAxe() {
       const { default: axe } = await import("axe-core");
       return axe.run(displayRoot);
+    }
+
+    async function runVisionContrast() {
+      const { checkVisionContrast } = await import("./cvd-contrast");
+      return checkVisionContrast(displayRoot);
     }
 
     const _highlightedEls: Map<HTMLElement, { outline: string; outlineOffset: string }> = new Map();
@@ -242,28 +258,95 @@ export async function startApp(
       }
     }
 
-    function getComponentTree() {
-      const container = displayRoot.firstElementChild as HTMLElement | null;
-      if (!container) return [];
-      const keys = Object.keys(container);
+    type ComponentTreeResult = {
+      name: string;
+      depth: number;
+      key: string | null;
+      isForwardRef: boolean;
+      isMemo: boolean;
+      domPath?: number[];
+    }[];
+
+    function findReactRoot(el: HTMLElement): { container: HTMLElement; key: string } | null {
+      // Use getOwnPropertyNames to include non-enumerable properties — React 18 may set
+      // __reactContainer$ as non-enumerable depending on the build/version.
+      const keys = Object.getOwnPropertyNames(el);
       const containerKey = keys.find((k) => k.startsWith("__reactContainer$"));
-      if (!containerKey) return [];
-      const results: {
-        name: string;
-        depth: number;
-        key: string | null;
-        isForwardRef: boolean;
-        isMemo: boolean;
-        domPath?: number[];
-      }[] = [];
-      walkDisplayFiber((container as any)[containerKey]?.child, 0, results, container);
-      return results;
+      if (containerKey) return { container: el, key: containerKey };
+      return null;
+    }
+
+    /**
+     * Walk a fiber up to the HostRoot (tag 3) and return it.
+     * Used when we find a fiber via __reactFiber$ on a DOM node rather than
+     * __reactContainer$ on the root container.
+     */
+    function getHostRootFiber(fiber: any): any {
+      let f = fiber;
+      while (f?.return) f = f.return;
+      return f;
+    }
+
+    /**
+     * Scan the live DOM for React roots and return whatever component tree is
+     * currently mounted. Called BEFORE runAfterDisplayHooks so the fiber is
+     * still alive when we read it.
+     */
+    function scanComponentTree(): ComponentTreeResult {
+      // 1. Check the expected container (fieldtest's setRenderTarget destination).
+      const primary = displayRoot.firstElementChild as HTMLElement | null;
+      if (primary) {
+        const root = findReactRoot(primary);
+        if (root) {
+          const results: ComponentTreeResult = [];
+          walkDisplayFiber((primary as any)[root.key]?.child, 0, results, primary);
+          if (results.length > 0) return results;
+        }
+      }
+
+      // 2. Scan document.body for React roots created by RTL's render()
+      //    when the test imports render from @testing-library/react directly.
+      for (const child of Array.from(document.body.children) as HTMLElement[]) {
+        if (child === displayRoot) continue;
+        const root = findReactRoot(child);
+        if (!root) continue;
+        const results: ComponentTreeResult = [];
+        walkDisplayFiber((child as any)[root.key]?.child, 0, results, child);
+        if (results.length > 0) return results;
+      }
+
+      // 3. Last resort: scan every DOM element for __reactFiber$ (React attaches this
+      //    to every rendered DOM node). Walk up the fiber to the HostRoot, then collect
+      //    the full component tree from there. Handles builds where __reactContainer$ is
+      //    not accessible but individual fiber references still exist on DOM nodes.
+      for (const el of Array.from(document.querySelectorAll("*")) as HTMLElement[]) {
+        const fiberKey = Object.getOwnPropertyNames(el).find((k) => k.startsWith("__reactFiber$"));
+        if (!fiberKey) continue;
+        const hostRoot = getHostRootFiber((el as any)[fiberKey]);
+        if (!hostRoot) continue;
+        const container = hostRoot.stateNode?.containerInfo as HTMLElement | null;
+        if (!container) continue;
+        const results: ComponentTreeResult = [];
+        walkDisplayFiber(hostRoot.child, 0, results, container);
+        if (results.length > 0) return results;
+      }
+
+      return [];
+    }
+
+    /**
+     * Returns the component tree from the most recent showTest/playTest call.
+     * The tree is captured before after-display hooks run so it is always valid
+     * even if a hook calls RTL cleanup() and destroys the React fiber.
+     */
+    function getComponentTree(): ComponentTreeResult {
+      return _capturedTree;
     }
 
     function walkDisplayFiber(
       fiber: any,
       depth: number,
-      results: ReturnType<typeof getComponentTree>,
+      results: ComponentTreeResult,
       container: HTMLElement,
     ) {
       if (!fiber) return;
@@ -326,6 +409,7 @@ export async function startApp(
       playTest,
       displayRoot,
       runAxe,
+      runVisionContrast,
       highlight,
       getComponentTree,
     };

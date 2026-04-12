@@ -25,7 +25,9 @@ function getDomPath(node: HTMLElement, root: HTMLElement): number[] | undefined 
 }
 
 function captureComponentTree(container: HTMLElement): ComponentNode[] {
-  const keys = Object.keys(container);
+  // Use getOwnPropertyNames to include non-enumerable properties — React 18 may set
+  // __reactContainer$ as non-enumerable depending on the build/version.
+  const keys = Object.getOwnPropertyNames(container);
 
   // React 18 createRoot sets __reactContainer$ on the root container element.
   const containerKey = keys.find((k) => k.startsWith("__reactContainer$"));

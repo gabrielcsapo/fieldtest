@@ -5,8 +5,8 @@ type Factory = () => Record<string, any>;
 
 const _registry = new Map<string, Factory | null>();
 
-/** Tracks which source file registered each mock */
-const _scopeMap = new Map<string, string>();
+/** Tracks which source files registered each mock (multiple files can mock the same module) */
+const _scopeMap = new Map<string, Set<string>>();
 
 let _currentMockScope: string | null = null;
 
@@ -104,7 +104,9 @@ function wrapWithSpies(
  */
 export function mock(moduleId: string, factory?: Factory): void {
   _registry.set(moduleId, factory ?? null);
-  _scopeMap.set(moduleId, _currentMockScope ?? "");
+  const scopes = _scopeMap.get(moduleId) ?? new Set<string>();
+  scopes.add(_currentMockScope ?? "");
+  _scopeMap.set(moduleId, scopes);
   _cache.delete(moduleId); // invalidate cached spy-wrapped result
 }
 
@@ -137,9 +139,11 @@ export function getMockEntriesWithCalls(sourceFile?: string): MockEntry[] {
   return Array.from(_registry.keys())
     .filter((moduleId) => {
       if (!sourceFile) return true;
-      const scope = _scopeMap.get(moduleId) ?? "";
-      // Match if scope ends with sourceFile or equals it (handles relative vs absolute)
-      return scope === sourceFile || scope.endsWith(sourceFile) || sourceFile.endsWith(scope);
+      const scopes = _scopeMap.get(moduleId) ?? new Set<string>();
+      // Match if any registered scope equals or contains sourceFile (handles relative vs absolute)
+      return [...scopes].some(
+        (scope) => scope === sourceFile || scope.endsWith(sourceFile) || sourceFile.endsWith(scope),
+      );
     })
     .map((moduleId) => ({
       moduleId,
@@ -177,3 +181,8 @@ export async function __ftImport(
   }
   return importFn();
 }
+
+// Expose on globalThis so the mock-loader-hooks can redirect imports in
+// non-test source files without adding a new `import` to those files
+// (which would risk pulling in the full test framework and duplicate React).
+(globalThis as unknown as Record<string, unknown>).__ftImport = __ftImport;

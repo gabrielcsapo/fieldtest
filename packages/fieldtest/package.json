@@ -1,0 +1,21 @@
+{
+  "name": "fieldtest",
+  "version": "0.1.0",
+  "bin": {
+    "fieldtest": "./bin/fieldtest.js"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@fieldtest/core": "workspace:*",
+    "@fieldtest/runner": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.2"
+  }
+}

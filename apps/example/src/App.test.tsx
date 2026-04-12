@@ -4,13 +4,19 @@
  *
  * These are the only tests that exercise multiple components working together.
  */
-import { describe, it, expect, render, fireEvent } from "@fieldtest/core";
+import React from "react";
+import { describe, it, expect, render, fireEvent, mock } from "fieldtest";
 import { http, HttpResponse } from "msw";
 import { worker } from "../.fieldtest/setup";
+
 import { App } from "./App";
 import type { User } from "./UserProfile";
 
-const ALICE: User = { id: 1, name: "Alice Chen", email: "alicechens@example.com", role: "admin" };
+mock("./greeting", () => ({
+  getGreeting: (name: string) => `Good morning, ${name}!`,
+}));
+
+const ALICE: User = { id: 1, name: "Alice Chen", email: "alicechen@example.com", role: "admin" };
 const BOB: User = { id: 2, name: "Bob Torres", email: "bob@example.com", role: "editor" };
 const EVE: User = { id: 3, name: "Eve Sharma", email: "eve@example.com", role: "viewer" };
 

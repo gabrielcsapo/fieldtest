@@ -4,7 +4,14 @@ export { expect } from "./framework/expect";
 export { render, snapshot, fireEvent, act } from "./framework/render";
 export { store, currentTest } from "./framework/store";
 export type { Store } from "./framework/store";
-export { runAll, runSuite, runTest, setCoverageProvider, setTestTimeout } from "./framework/runner";
+export {
+  runAll,
+  runSuite,
+  runSuites,
+  runTest,
+  setCoverageProvider,
+  setTestTimeout,
+} from "./framework/runner";
 export type { CoverageProvider } from "./framework/runner";
 export type {
   TestStatus,
@@ -38,5 +45,20 @@ export {
 export { registerTab } from "./ui/plugins";
 export type { TabPlugin } from "./ui/plugins";
 
-// Browser UI
-export { startApp, reloadFile } from "./ui/start";
+// Browser UI — lazy-loaded so that @react-three/fiber / three.js are never
+// imported in the node runner (where startApp and reloadFile are never called).
+import type { startApp as _startAppT, reloadFile as _reloadFileT } from "./ui/start";
+
+export async function startApp(
+  ...args: Parameters<typeof _startAppT>
+): ReturnType<typeof _startAppT> {
+  const { startApp: fn } = await import("./ui/start");
+  return fn(...args);
+}
+
+export async function reloadFile(
+  ...args: Parameters<typeof _reloadFileT>
+): ReturnType<typeof _reloadFileT> {
+  const { reloadFile: fn } = await import("./ui/start");
+  return fn(...args);
+}

@@ -1,8 +1,6 @@
 import { createServer, build } from "vite";
 import type { Plugin } from "vite";
-import react from "@vitejs/plugin-react";
-import { fieldtest } from "@fieldtest/core/plugin";
-import istanbul from "vite-plugin-istanbul";
+import { fieldtest, fieldtestCoverage } from "@fieldtest/core/plugin";
 import { readFile, readdir, stat, writeFile, unlink } from "node:fs/promises";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -327,17 +325,7 @@ export async function startUi() {
   const updateSnapshots = args.includes("--update-snapshots");
 
   const server = await createServer({
-    plugins: [
-      fieldtestDevPlugin({ updateSnapshots }),
-      fieldtest({ include }),
-      istanbul({
-        include: "src/**/*",
-        exclude: ["node_modules", "**/*.test.*", "**/*.spec.*"],
-        extension: [".ts", ".tsx", ".js", ".jsx"],
-        forceBuildInstrument: false,
-        requireEnv: false,
-      }),
-    ],
+    plugins: [fieldtestDevPlugin({ updateSnapshots }), fieldtest({ include }), fieldtestCoverage()],
     server: { port: 3333, open: true },
   });
 
@@ -400,11 +388,25 @@ export async function buildUi() {
   // with relative patterns when the entry file sits inside the project root.
   const relPattern = "./" + (include.startsWith("/") ? include.slice(1) : include);
 
+  // Detect whether the consuming project depends on "fieldtest" or "@fieldtest/core"
+  // so the generated entry imports from the same package name the project uses.
+  let runtimePkg = "@fieldtest/core";
+  try {
+    const pkg = JSON.parse(await readFile(join(root, "package.json"), "utf8")) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const all = { ...pkg.dependencies, ...pkg.devDependencies };
+    if ("fieldtest" in all) runtimePkg = "fieldtest";
+  } catch {
+    /* ignore — fall back to @fieldtest/core */
+  }
+
   // Write a real entry file so Rollup can discover it through the HTML pipeline.
   // (Virtual modules work in dev but the /@id/ URL is not followed during builds.)
   const tempEntry = join(root, "__fieldtest_entry__.ts");
   const entryLines = [
-    `import { startApp } from '@fieldtest/core'`,
+    `import { startApp } from '${runtimePkg}'`,
     setupFile ? `import '/${setupFile}'` : null,
     previewFile ? `import _wrapper from '/${previewFile}'` : null,
     `const tests = import.meta.glob(${JSON.stringify(relPattern)})`,
@@ -429,17 +431,7 @@ export async function buildUi() {
   try {
     await build({
       root,
-      plugins: [
-        react(),
-        fieldtest({ include, injectHtml: false }),
-        istanbul({
-          include: "src/**/*",
-          exclude: ["node_modules", "**/*.test.*", "**/*.spec.*"],
-          extension: [".ts", ".tsx", ".js", ".jsx"],
-          forceBuildInstrument: true,
-          requireEnv: false,
-        }),
-      ],
+      plugins: [fieldtest({ include, injectHtml: false }), fieldtestCoverage()],
       base,
       // Define NODE_ENV as 'test' so React includes act() and testing utilities.
       // The fieldtest UI is a test runner — it needs React's test-mode APIs.

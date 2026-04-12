@@ -299,11 +299,13 @@ function TextDiff({ baseline, current }: { baseline: string; current: string }) 
             : isRemove
               ? "rgba(239,68,68,0.12)"
               : "transparent",
-          borderLeft: isAdd
-            ? "3px solid rgba(34,197,94,0.7)"
+          borderLeftWidth: "3px",
+          borderLeftStyle: "solid",
+          borderLeftColor: isAdd
+            ? "rgba(34,197,94,0.7)"
             : isRemove
-              ? "3px solid rgba(239,68,68,0.7)"
-              : "3px solid transparent",
+              ? "rgba(239,68,68,0.7)"
+              : "transparent",
         }}
       >
         <span
@@ -720,8 +722,10 @@ function TabBar({
                 flexShrink: 0,
                 padding: "10px 16px",
                 background: "none",
-                border: "none",
-                borderBottom: `2px solid ${isActive ? "#6366f1" : "transparent"}`,
+                borderWidth: 0,
+                borderBottomWidth: 2,
+                borderBottomStyle: "solid",
+                borderBottomColor: isActive ? "#6366f1" : "transparent",
                 color: isActive ? "#a5b4fc" : "#4b4b60",
                 fontSize: 12,
                 fontWeight: isActive ? 600 : 400,
@@ -834,6 +838,7 @@ interface DisplayApi {
   playTest: (suiteName: string, testName: string, speed?: number) => Promise<boolean>;
   displayRoot: HTMLElement;
   runAxe?: () => Promise<import("axe-core").AxeResults>;
+  runVisionContrast?: () => Promise<import("../cvd-contrast").VisionContrastReport>;
   highlight?: (highlights: { path: number[]; color: string }[]) => void;
   getComponentTree?: () => ComponentNode[];
 }
@@ -997,6 +1002,12 @@ export function Preview({
     displayApiRef.current.showTest(test.suiteName, test.name, snapHtml).then((rendered) => {
       setDisplayHasContent(rendered);
       if (rendered) canvasRef.current = displayApiRef.current?.displayRoot ?? null;
+      // Populate liveComponentTree from the pre-captured snapshot taken inside showTest
+      // before any after-display hooks ran (hooks may call RTL cleanup and destroy the fiber).
+      const tree = displayApiRef.current?.getComponentTree?.();
+      if (tree && tree.length > 0) {
+        setLiveComponentTree(tree);
+      }
     });
   }, [test?.id, displayReady, lastSnapshotTimestamp]);
 
@@ -1115,9 +1126,12 @@ export function Preview({
     update();
     const ro = new ResizeObserver(update);
     ro.observe(canvas);
+    const scrollContainer = contentAreaRef.current;
+    scrollContainer?.addEventListener("scroll", update);
     window.addEventListener("resize", update);
     return () => {
       ro.disconnect();
+      scrollContainer?.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
     };
   }, [showLive, canvasPaneHeight, viewport, vision, isPlaying, hasPlayed, expanded]);
@@ -1376,7 +1390,8 @@ export function Preview({
                     width: 26,
                     height: 26,
                     borderRadius: 5,
-                    border: "1px solid",
+                    borderWidth: 1,
+                    borderStyle: "solid",
                     borderColor: isPlaying ? "rgba(99,102,241,0.6)" : "#2a2a36",
                     background: isPlaying ? "rgba(99,102,241,0.2)" : "transparent",
                     color: isPlaying ? "#a5b4fc" : "#4b4b60",
@@ -1424,7 +1439,8 @@ export function Preview({
                         width: 26,
                         height: 26,
                         borderRadius: 5,
-                        border: "1px solid",
+                        borderWidth: 1,
+                        borderStyle: "solid",
                         borderColor: isActive ? "rgba(99,102,241,0.6)" : "#2a2a36",
                         background: isActive ? "rgba(99,102,241,0.2)" : "transparent",
                         color: isActive ? "#a5b4fc" : "#4b4b60",
@@ -1462,7 +1478,8 @@ export function Preview({
                     width: 26,
                     height: 26,
                     borderRadius: 5,
-                    border: "1px solid",
+                    borderWidth: 1,
+                    borderStyle: "solid",
                     borderColor: expanded ? "rgba(99,102,241,0.6)" : "#2a2a36",
                     background: expanded ? "rgba(99,102,241,0.2)" : "transparent",
                     color: expanded ? "#a5b4fc" : "#4b4b60",
@@ -1538,7 +1555,17 @@ export function Preview({
                 )}
 
                 {/* Live interactive component is shown in the display iframe overlay (positioned by useLayoutEffect) */}
-                {showLive && <div style={{ width: "100%", minHeight: 200 }} />}
+                {showLive && (
+                  <div
+                    style={{ width: "100%", minHeight: 200 }}
+                    onWheel={(e) => {
+                      const iframeWin = displayIframeRef.current?.contentWindow;
+                      if (iframeWin) {
+                        iframeWin.scrollBy(e.deltaX, e.deltaY);
+                      }
+                    }}
+                  />
+                )}
 
                 {/* Hint overlay — shown when the live component is visible but not playing */}
                 {showLive && !isPlaying && !hasPlayed && (
@@ -1668,6 +1695,10 @@ export function Preview({
               <AxePanel
                 containerRef={canvasRef as React.RefObject<HTMLElement | null>}
                 runAxe={displayApiRef.current?.runAxe}
+                runVisionContrast={displayApiRef.current?.runVisionContrast}
+                onVisionChange={(v) =>
+                  setVision(v as import("./toolbar/VisionFilter").VisionFilter)
+                }
                 active={true}
                 onResults={setAxeViolationCount}
               />
