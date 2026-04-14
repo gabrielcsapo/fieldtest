@@ -45,3 +45,19 @@ jobs:
 
       - name: Test — scale app
         run: pnpm --filter scale test
+
+      - name: Install Playwright browsers
+        run: pnpm --filter e2e exec playwright install --with-deps chromium
+
+      - name: Test — e2e (dev + build)
+        run: pnpm test:e2e
+        env:
+          CI: true
+
+      - name: Upload Playwright test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: apps/e2e/test-results/
+          retention-days: 7

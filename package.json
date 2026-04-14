@@ -6,6 +6,9 @@
     "dev": "pnpm --filter @fieldtest/core dev & pnpm --filter example dev",
     "test:node": "pnpm --filter example test:node",
     "test:node:watch": "pnpm --filter example test:node:watch",
+    "test:e2e": "pnpm --filter e2e test",
+    "test:e2e:dev": "pnpm --filter e2e test:dev",
+    "test:e2e:build": "pnpm --filter e2e test:build",
     "lint": "oxlint .",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
@@ -13,7 +16,7 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "oxfmt": "^0.44.0",
-    "oxlint": "^1.59.0"
+    "oxfmt": "^0.45.0",
+    "oxlint": "^1.60.0"
   }
 }
