@@ -11,6 +11,8 @@ export default defineConfig({
   expect: { timeout: 30_000 },
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // Run the dev and build projects in parallel in CI (they use separate ports).
+  workers: process.env.CI ? 2 : undefined,
   use: {
     trace: "on-first-retry",
     screenshot: "only-on-failure",

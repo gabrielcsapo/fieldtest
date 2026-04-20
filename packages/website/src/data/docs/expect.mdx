@@ -44,6 +44,16 @@ expect({ a: 1 }).toEqual({ a: 1 });
 expect([1, 2, 3]).toEqual([1, 2, 3]);
 ```
 
+On failure, fieldtest reports only the paths that differ rather than printing both full objects:
+
+```
+toEqual failed:
+  - received user.role: "viewer"
+  + expected user.role: "admin"
+  - received scores[2]: 4
+  + expected scores[2]: 3
+```
+
 ---
 
 ## Truthiness

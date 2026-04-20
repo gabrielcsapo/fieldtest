@@ -34,8 +34,9 @@ function recordCall(
   args: unknown[],
   result: unknown,
   threw: boolean,
+  stack: string | undefined,
 ) {
-  _callLog.push({ moduleId, fnName, args, result, threw, timestamp: Date.now() });
+  _callLog.push({ moduleId, fnName, args, result, threw, timestamp: Date.now(), stack });
 }
 
 /** Shape of the spy metadata attached to each wrapped function */
@@ -60,6 +61,9 @@ function wrapWithSpies(
     const spyCalls: SpyMetadata["_spyCalls"] = [];
     const spy = Object.assign(
       (...args: unknown[]) => {
+        // Capture the stack synchronously at entry — before the actual function
+        // runs — so it reflects the real call site, not a promise continuation.
+        const stack = new Error().stack;
         let result: unknown;
         try {
           result = fn(...args);
@@ -67,23 +71,23 @@ function wrapWithSpies(
           if (result instanceof Promise) {
             return result.then(
               (resolved) => {
-                recordCall(moduleId, key, args, resolved, false);
+                recordCall(moduleId, key, args, resolved, false, stack);
                 spyCalls.push({ args, result: resolved, threw: false });
                 return resolved;
               },
               (err) => {
-                recordCall(moduleId, key, args, err, true);
+                recordCall(moduleId, key, args, err, true, stack);
                 spyCalls.push({ args, result: err, threw: true });
                 throw err;
               },
             );
           }
         } catch (err) {
-          recordCall(moduleId, key, args, err, true);
+          recordCall(moduleId, key, args, err, true, stack);
           spyCalls.push({ args, result: err, threw: true });
           throw err;
         }
-        recordCall(moduleId, key, args, result, false);
+        recordCall(moduleId, key, args, result, false, stack);
         spyCalls.push({ args, result, threw: false });
         return result;
       },
@@ -128,6 +132,15 @@ export function clearAllMocks(): void {
 /** Drop the per-test call log — called by the runner before each test */
 export function clearCallLog(): void {
   _callLog.length = 0;
+  // Also reset the per-spy _spyCalls arrays so programmatic spy assertions
+  // (e.g. spy._spyCalls.length) reflect only the current test's calls.
+  for (const wrapped of _cache.values()) {
+    for (const value of Object.values(wrapped)) {
+      if (value && typeof value === "object" && (value as { _isSpy?: true })._isSpy) {
+        ((value as unknown as SpyMetadata)._spyCalls as unknown[]).length = 0;
+      }
+    }
+  }
 }
 
 /**
@@ -150,12 +163,13 @@ export function getMockEntriesWithCalls(sourceFile?: string): MockEntry[] {
       hasFactory: _registry.get(moduleId) !== null,
       calls: _callLog
         .filter((c) => c.moduleId === moduleId)
-        .map(({ fnName, args, result, threw, timestamp }) => ({
+        .map(({ fnName, args, result, threw, timestamp, stack }) => ({
           fnName,
           args,
           result,
           threw,
           timestamp,
+          stack,
         })),
     }));
 }

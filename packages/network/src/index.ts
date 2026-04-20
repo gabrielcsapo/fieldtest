@@ -215,3 +215,18 @@ export const worker: { use(...h: any[]): void; resetHandlers(): void } = _mswIns
   use() {},
   resetHandlers() {},
 };
+
+/**
+ * Returns all network entries captured so far for the currently running test.
+ * Useful for asserting on network calls made during a test.
+ *
+ * @example
+ * it("fetches users", async () => {
+ *   await renderAndWait(<UserList />);
+ *   const requests = getNetworkRequests();
+ *   expect(requests.some(r => r.url.includes("/api/users"))).toBe(true);
+ * });
+ */
+export function getNetworkRequests(): import("@fieldtest/core").NetworkEntry[] {
+  return currentTest?.networkEntries ?? [];
+}

@@ -182,6 +182,7 @@ export async function load(url, context, nextLoad) {
         loader: lang,
         format: "esm",
         target: "node20",
+        jsx: "automatic",
         sourcefile: fileURLToPath(url),
         sourcemap: "inline",
       });
@@ -225,6 +226,7 @@ export async function load(url, context, nextLoad) {
       loader: lang,
       format: "esm",
       target: "node20",
+      jsx: "automatic",
       sourcefile: fileURLToPath(url),
       sourcemap: "inline",
     });
@@ -242,14 +244,19 @@ export async function load(url, context, nextLoad) {
  * Rewrite a test file's TypeScript/JavaScript source so that mock() calls are
  * registered before module imports resolve. Returns null if no rewrite needed.
  */
+// All package names that serve as the fieldtest runtime entry point.
+// Checked statically so that projects using either name work regardless of
+// which package.json getRuntimePkg() happens to read (e.g. monorepo roots
+// that don't list the example app's deps).
+const CORE_PKGS = new Set(["fieldtest", "@fieldtest/core"]);
+
 function mockHoist(code) {
   const imports = collectImports(code);
-  const pkg = getRuntimePkg();
   const coreImports = imports.filter(function (n) {
-    return n.source === pkg || n.source === "@fieldtest/core";
+    return CORE_PKGS.has(n.source);
   });
   const otherImports = imports.filter(function (n) {
-    return n.source !== pkg && n.source !== "@fieldtest/core";
+    return !CORE_PKGS.has(n.source);
   });
 
   if (otherImports.length === 0) return null;

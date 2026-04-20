@@ -74,6 +74,8 @@ export interface MockCall {
   threw: boolean;
   /** ms since epoch when the call happened */
   timestamp: number;
+  /** Raw Error.stack captured at the call site */
+  stack?: string;
 }
 
 export interface MockEntry {
@@ -115,11 +117,15 @@ export interface TestCase {
   testCoverage: IstanbulCoverage | null;
   /** Wall-clock ms the test took to run */
   duration?: number;
+  /** Per-test timeout override in ms — takes precedence over the global setTestTimeout() value */
+  timeout?: number;
   /** Undefined for node tests — results arrive from the server, not executed in-browser */
   fn?: () => void | Promise<void>;
   /** Marked with it.only or inside a describe.only — only these run when any .only exists */
   only?: boolean;
 }
+
+export type Hook = () => void | Promise<void>;
 
 export interface TestSuite {
   id: string;
@@ -132,6 +138,14 @@ export interface TestSuite {
   duration?: number;
   /** Where the tests ran — browser (default) or Node via the Vite server */
   runtime?: "browser" | "node";
+  /** Registered once-per-suite setup hooks (beforeAll) */
+  beforeAllFns?: Hook[];
+  /** Registered once-per-suite teardown hooks (afterAll) */
+  afterAllFns?: Hook[];
+  /** Registered per-test setup hooks scoped to this suite (beforeEach) */
+  beforeEachFns?: Hook[];
+  /** Registered per-test teardown hooks scoped to this suite (afterEach) */
+  afterEachFns?: Hook[];
 }
 
 // Istanbul coverage types (subset we actually use)

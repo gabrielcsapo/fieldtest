@@ -164,6 +164,8 @@ for (const name of [
   "MutationObserver",
   "ResizeObserver",
   "IntersectionObserver",
+  "NodeFilter",
+  "DOMParser",
   "getComputedStyle",
   "requestAnimationFrame",
   "cancelAnimationFrame",
@@ -176,11 +178,13 @@ setGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 
 // ─── Dep graph ────────────────────────────────────────────────────────────────
 
+const IMPORT_RE = /(?:^|\s)(?:import|from)\s+['"]([^'"]+)['"]/gm;
+
 function parseImports(content: string): string[] {
-  const re = /(?:^|\s)(?:import|from)\s+['"]([^'"]+)['"]/gm;
   const result: string[] = [];
+  IMPORT_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) result.push(m[1]);
+  while ((m = IMPORT_RE.exec(content)) !== null) result.push(m[1]);
   return result;
 }
 
@@ -189,7 +193,17 @@ function parseImports(content: string): string[] {
  * to its TypeScript source entry. Returns null if the package is not a workspace
  * symlink or if its source entry cannot be found.
  */
+const _workspaceImportCache = new Map<string, string | null>();
+
 function resolveWorkspaceImport(fromFile: string, imp: string): string | null {
+  const cacheKey = `${fromFile}\0${imp}`;
+  if (_workspaceImportCache.has(cacheKey)) return _workspaceImportCache.get(cacheKey) ?? null;
+  const result = _resolveWorkspaceImportUncached(fromFile, imp);
+  _workspaceImportCache.set(cacheKey, result);
+  return result;
+}
+
+function _resolveWorkspaceImportUncached(fromFile: string, imp: string): string | null {
   // Extract bare package name (handle scoped packages like @scope/pkg)
   const parts = imp.split("/");
   const pkgName = imp.startsWith("@") ? `${parts[0]}/${parts[1]}` : parts[0];
@@ -555,7 +569,7 @@ export async function runNode() {
   // Print cached results immediately in original file order
   for (const file of files) {
     const cached = cacheHits.filter((s) => s.sourceFile === file);
-    if (cached.length > 0) print(_renderResults(cached, verboseFlag, cwd).lines);
+    if (cached.length > 0) print(_renderResults(cached, verboseFlag, cwd, true).lines);
   }
 
   // Run each cache-miss file and stream its result immediately

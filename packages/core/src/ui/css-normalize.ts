@@ -50,6 +50,24 @@ export function normalizeHtmlStyles(html: string): string {
       while (el.attributes.length > 0) el.removeAttribute(el.attributes[0].name);
       attrs.forEach(({ name, value }) => el.setAttribute(name, value));
     });
+
+    // 3. Normalize text nodes: remove whitespace-only ones (indentation/newlines
+    //    between elements from pretty-printed HTML) and trim leading/trailing
+    //    whitespace from content nodes so node vs browser formatting differences
+    //    don't produce spurious diffs.
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    const whitespaceNodes: Node[] = [];
+    let textNode: Node | null;
+    while ((textNode = walker.nextNode())) {
+      const trimmed = textNode.textContent?.trim() ?? "";
+      if (!trimmed) {
+        whitespaceNodes.push(textNode);
+      } else {
+        textNode.textContent = trimmed;
+      }
+    }
+    whitespaceNodes.forEach((n) => n.parentNode?.removeChild(n));
+
     return host.innerHTML;
   } finally {
     document.body.removeChild(host);

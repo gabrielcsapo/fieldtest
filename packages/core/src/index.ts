@@ -1,5 +1,15 @@
 // Framework — what test files import
-export { describe, it, test, setCurrentSourceFile } from "./framework/dsl";
+export {
+  describe,
+  it,
+  test,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  afterEach,
+  setCurrentSourceFile,
+} from "./framework/dsl";
+export type { TestOptions } from "./framework/dsl";
 export { expect } from "./framework/expect";
 export { render, snapshot, fireEvent, act } from "./framework/render";
 export { store, currentTest } from "./framework/store";

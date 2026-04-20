@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname, resolve as resolvePath, relative } from "node:path";
+import { createHash } from "node:crypto";
 import type { Plugin, ResolvedConfig, ViteDevServer } from "vite";
 import { parseAstAsync, transformWithOxc } from "vite";
 
@@ -691,6 +692,170 @@ async function transformTestFile(
   return { code: newCode };
 }
 
+/**
+ * Extract the specifier strings from top-level mock() calls in a test file.
+ * Uses a simple regex rather than a full AST parse — called before OXC stripping
+ * so it operates on the raw TypeScript source.
+ */
+function extractMockSpecifiersFromSource(code: string): string[] {
+  const specifiers: string[] = [];
+  const re = /(?:^|\n)mock\s*\(\s*(['"])(.*?)\1/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(code)) !== null) {
+    specifiers.push(m[2]);
+  }
+  return specifiers;
+}
+
+/**
+ * Transform a non-test source file so that imports of mocked modules are
+ * redirected through globalThis.__ftImport at runtime (set by mocks.ts).
+ * Mirrors the node runner's transformNonTestFile in mock-loader-hooks.js.
+ *
+ * Only the specifically mocked imports are converted; all other imports remain
+ * as static ESM declarations. Falls back to the real import() if __ftImport
+ * is not available (e.g. in a production build or non-test context).
+ */
+async function transformSourceFileForMocks(
+  code: string,
+  id: string,
+  // Key: absolute path of mocked module (no extension); value: specifier string passed to mock()
+  knownMocks: Map<string, string>,
+): Promise<{ code: string } | null> {
+  // Quick bail-out: check if any mocked specifier string appears in the source
+  let hasMockRef = false;
+  for (const spec of knownMocks.values()) {
+    if (code.includes(spec)) {
+      hasMockRef = true;
+      break;
+    }
+  }
+  if (!hasMockRef) return null;
+
+  // Strip TypeScript types with OXC first (parseAstAsync only handles JS)
+  let jsCode: string;
+  try {
+    const lang = id.endsWith(".tsx")
+      ? "tsx"
+      : id.endsWith(".jsx")
+        ? "jsx"
+        : id.endsWith(".js")
+          ? "js"
+          : "ts";
+    jsCode = (await transformWithOxc(code, id, { lang })).code;
+  } catch {
+    return null;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let ast: any;
+  try {
+    ast = await parseAstAsync(jsCode);
+  } catch {
+    return null;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allImports: any[] = ast.body.filter((n: any) => n.type === "ImportDeclaration");
+  if (allImports.length === 0) return null;
+
+  const fileDir = dirname(id);
+
+  // Identify which imports need to be redirected through __ftImport
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toRedirect = new Map<any, string>(); // AST node -> mockSpec
+  for (const node of allImports) {
+    const source: string = node.source.value;
+    if (source.startsWith(".")) {
+      const absBase = resolvePath(fileDir, source).replace(/\.[jt]sx?$/, "");
+      if (knownMocks.has(absBase)) {
+        toRedirect.set(node, knownMocks.get(absBase)!);
+      }
+    } else if (knownMocks.has(source)) {
+      toRedirect.set(node, knownMocks.get(source)!);
+    }
+  }
+
+  if (toRedirect.size === 0) return null;
+
+  // Compute preamble and interstitial ranges (same logic as transformTestFile).
+  // OXC may inject `import { jsxDEV }` at position 0 and `var _jsxFileName` between
+  // imports — preserve them in the output.
+  const firstImportStart = allImports[0].start;
+  const lastImportEnd = Math.max(...allImports.map((n: any) => n.end));
+  const preamble = firstImportStart > 0 ? jsCode.slice(0, firstImportStart) : "";
+  const interstitial = (ast.body as any[])
+    .filter(
+      (n) =>
+        n.type !== "ImportDeclaration" && n.start >= firstImportStart && n.start < lastImportEnd,
+    )
+    .map((n) => jsCode.slice(n.start, n.end));
+
+  let restStart = lastImportEnd;
+  if (jsCode[restStart] === "\n") restStart++;
+  const rest = jsCode.slice(restStart);
+
+  // Build the output in four sections:
+  //   1. Static imports (non-redirected) — must precede any executable code
+  //   2. const __ftImport = globalThis.__ftImport ?? fallback
+  //   3. await __ftImport(...) for each redirected import (top-level await)
+  //   4. interstitial + rest of file
+  const staticImportLines: string[] = [];
+  const dynamicImportLines: string[] = [];
+
+  for (const node of allImports) {
+    if (!toRedirect.has(node)) {
+      staticImportLines.push(jsCode.slice(node.start, node.end));
+      continue;
+    }
+    const mockSpec = toRedirect.get(node)!;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const specifiers: ImportSpecifier[] = (node.specifiers ?? []).map((s: any) => {
+      if (s.type === "ImportDefaultSpecifier")
+        return { type: "default" as const, imported: "default", local: s.local.name };
+      if (s.type === "ImportNamespaceSpecifier")
+        return { type: "namespace" as const, imported: "*", local: s.local.name };
+      return { type: "named" as const, imported: s.imported.name, local: s.local.name };
+    });
+
+    // Use mockSpec as the registry key; original source as the fallback import() path
+    // so that relative path resolution stays correct for the calling file.
+    const mockQ = JSON.stringify(mockSpec);
+    const origQ = JSON.stringify(node.source.value);
+    const fn = `() => import(${origQ})`;
+
+    if (specifiers.length === 0) {
+      dynamicImportLines.push(`await __ftImport(${mockQ}, ${fn})`);
+    } else {
+      const ns = specifiers.find((s) => s.type === "namespace");
+      if (ns) {
+        dynamicImportLines.push(`const ${ns.local} = await __ftImport(${mockQ}, ${fn})`);
+      } else {
+        const parts: string[] = [];
+        for (const s of specifiers) {
+          if (s.type === "default") parts.push(`default: ${s.local}`);
+          else parts.push(s.imported === s.local ? s.imported : `${s.imported}: ${s.local}`);
+        }
+        dynamicImportLines.push(
+          `const { ${parts.join(", ")} } = await __ftImport(${mockQ}, ${fn})`,
+        );
+      }
+    }
+  }
+
+  // Avoid importing the test framework into source files (duplicate React risk).
+  // Use the globalThis reference set by mocks.ts; fall back to direct import() when
+  // running outside the test runner (production builds, static deployments, etc.).
+  const ftImportDecl = "const __ftImport = globalThis.__ftImport ?? ((_id, fn) => fn());";
+
+  const parts = [preamble, staticImportLines.join("\n"), ftImportDecl];
+  if (dynamicImportLines.length) parts.push(dynamicImportLines.join("\n"));
+  if (interstitial.length) parts.push(interstitial.join("\n"));
+  parts.push(rest);
+
+  return { code: parts.filter(Boolean).join("\n") };
+}
+
 /** Detect which package name the consuming project uses for the fieldtest runtime. */
 function detectRuntimePkg(root: string): string {
   try {
@@ -711,6 +876,15 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
   let config: ResolvedConfig;
   let runtimePkg = "@fieldtest/core";
 
+  // Map from resolved absolute path base (no extension) → specifier string passed to mock().
+  // Populated during server startup (pre-scan) and when browser test files are transformed.
+  // Consulted when transforming non-test source files so that their imports of mocked modules
+  // can be redirected through __ftImport. Mirrors mock-loader-hooks.js for the node runner.
+  const _knownMocks = new Map<string, string>();
+
+  // Stored server reference — used to invalidate cached source modules when _knownMocks updates.
+  let _server: ViteDevServer | null = null;
+
   return {
     name: "fieldtest",
 
@@ -720,7 +894,14 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
     },
 
     async transform(code, id) {
-      if (!TEST_FILE_RE.test(id)) return null;
+      if (!TEST_FILE_RE.test(id)) {
+        // Non-test source file: if any mocked modules might be imported here,
+        // redirect those imports through globalThis.__ftImport so test mocks apply.
+        if (_knownMocks.size > 0 && /\.[jt]sx?$/.test(id.split("?")[0])) {
+          return transformSourceFileForMocks(code, id, _knownMocks);
+        }
+        return null;
+      }
 
       // Check comment override first (cheap), then walk the import DAG
       const needsNode = NODE_ENV_OVERRIDE_RE.test(code) || (await hasNodeBuiltinDep(code, id));
@@ -730,10 +911,84 @@ export function fieldtest(options: FieldtestOptions = {}): Plugin {
         };
       }
 
+      // Browser test file: record which modules it mocks so we can intercept those
+      // imports in non-test source files that load as dependencies.
+      if (code.includes("mock(")) {
+        const newlyMocked: string[] = [];
+        for (const spec of extractMockSpecifiersFromSource(code)) {
+          if (spec.startsWith(".")) {
+            const absBase = resolvePath(dirname(id), spec).replace(/\.[jt]sx?$/, "");
+            if (!_knownMocks.has(absBase)) newlyMocked.push(absBase);
+            _knownMocks.set(absBase, spec);
+          } else {
+            if (!_knownMocks.has(spec)) newlyMocked.push(spec);
+            _knownMocks.set(spec, spec);
+          }
+        }
+        // Invalidate any already-cached source modules that import newly mocked paths.
+        // This handles the case where a source file was transformed before the pre-scan
+        // populated _knownMocks (e.g. HMR or dynamically added test files).
+        if (newlyMocked.length > 0 && _server) {
+          for (const [, mod] of _server.moduleGraph.idToModuleMap) {
+            if (!mod.id || TEST_FILE_RE.test(mod.id)) continue;
+            for (const imported of mod.importedModules) {
+              const importedBase = imported.id?.split("?")[0].replace(/\.[jt]sx?$/, "");
+              if (importedBase && newlyMocked.includes(importedBase)) {
+                _server.moduleGraph.invalidateModule(mod);
+                break;
+              }
+            }
+          }
+        }
+      }
+
       return transformTestFile(code, id, runtimePkg);
     },
 
     configureServer(server) {
+      _server = server;
+
+      // Pre-scan all test files so that _knownMocks is populated before the first
+      // browser request arrives. Without this, App.tsx can be transformed while
+      // _knownMocks is still empty (race between test-file transform and source-file
+      // transform), causing mock("./greeting") to register too late.
+      const root = config?.root ?? process.cwd();
+      const srcBase = include.split("/**")[0].replace(/^\//, ""); // e.g. "src"
+      const srcDir = join(root, srcBase);
+
+      function scanForMocks(dir: string): void {
+        let entries: import("node:fs").Dirent[];
+        try {
+          entries = readdirSync(dir, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const entry of entries) {
+          const full = join(dir, entry.name);
+          if (entry.isDirectory()) {
+            if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+            scanForMocks(full);
+          } else if (TEST_FILE_RE.test(entry.name)) {
+            try {
+              const src = readFileSync(full, "utf-8");
+              if (!src.includes("mock(")) continue;
+              for (const spec of extractMockSpecifiersFromSource(src)) {
+                if (spec.startsWith(".")) {
+                  const absBase = resolvePath(dirname(full), spec).replace(/\.[jt]sx?$/, "");
+                  _knownMocks.set(absBase, spec);
+                } else {
+                  _knownMocks.set(spec, spec);
+                }
+              }
+            } catch {
+              /* ignore unreadable files */
+            }
+          }
+        }
+      }
+
+      scanForMocks(srcDir);
+
       server.ws.on("vt:run-node-test", async (data: { path: string }, client) => {
         try {
           const suites = await runNodeTestFile(server, data.path, config?.root ?? process.cwd());
@@ -831,6 +1086,10 @@ interface CoverageOptions {
 const COVERAGE_EXCLUDE_RE = /node_modules|\.test\.[jt]sx?$|\.spec\.[jt]sx?$|\.d\.ts$/;
 const COVERAGE_EXT = new Set([".ts", ".tsx", ".js", ".jsx"]);
 
+// Shared cache across plugin instances — keyed by `cleanId:contentHash` so HMR
+// invalidates naturally when file content changes.
+const _instrumentationCache = new Map<string, { code: string; map: unknown }>();
+
 // Lazy-loaded to avoid pulling istanbul-lib-instrument into non-coverage paths.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _createInstrumenter: ((opts: object) => any) | null | undefined;
@@ -855,6 +1114,10 @@ async function getCreateInstrumenter() {
 export function fieldtestCoverage(options: CoverageOptions = {}): Plugin {
   const { extension = [".ts", ".tsx", ".js", ".jsx"] } = options;
   const extSet = new Set(extension);
+  // Reuse a single instrumenter instance across all transform calls — construction
+  // is expensive (Babel parser setup) and the instrumenter is stateless between files.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let _instrumenter: any | null = null;
 
   return {
     name: "fieldtest-coverage",
@@ -876,18 +1139,27 @@ export function fieldtestCoverage(options: CoverageOptions = {}): Plugin {
       // Use TypeScript + JSX parser plugins so istanbul can parse .ts/.tsx source.
       // We do NOT run Babel's React JSX transform — only the instrumentation pass —
       // so no `_jsxFileName` variable is injected. Vite's OXC handles JSX later.
-      const instrumenter = createInstrumenter({
-        esModules: true,
-        compact: false,
-        produceSourceMap: true,
-        autoWrap: false,
-        parserPlugins: ["typescript", "jsx"],
-      });
+      if (!_instrumenter) {
+        _instrumenter = createInstrumenter({
+          esModules: true,
+          compact: false,
+          produceSourceMap: true,
+          autoWrap: false,
+          parserPlugins: ["typescript", "jsx"],
+        });
+      }
+
+      const contentHash = createHash("sha1").update(code).digest("hex");
+      const instrCacheKey = `${cleanId}:${contentHash}`;
+      const cached = _instrumentationCache.get(instrCacheKey);
+      if (cached) return cached;
 
       try {
-        const instrumented = instrumenter.instrumentSync(code, cleanId);
-        const map = instrumenter.lastSourceMap();
-        return { code: instrumented, map: map ?? null };
+        const instrumented = _instrumenter.instrumentSync(code, cleanId);
+        const map = _instrumenter.lastSourceMap();
+        const result = { code: instrumented, map: map ?? null };
+        _instrumentationCache.set(instrCacheKey, result);
+        return result;
       } catch {
         // Parse/instrument failed (e.g. unsupported syntax) — leave file as-is
         return null;

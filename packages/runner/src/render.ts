@@ -57,6 +57,7 @@ export function renderResults(
   suites: SerializableTestSuite[],
   verbose = false,
   cwd = "",
+  cached = false,
 ): RenderResultsOutput {
   const lines: string[] = [];
   let totalPass = 0,
@@ -100,8 +101,9 @@ export function renderResults(
     const badge = filePassed ? `${GREEN}${BOLD} node ${RESET}` : `${RED}${BOLD} node ${RESET}`;
     const filePath = sourceFile ? (cwd ? rel(sourceFile, cwd) : sourceFile) : "(unknown)";
     const dur = fileDuration > 0 ? `  ${DIM}${formatDuration(fileDuration)}${RESET}` : "";
+    const cachedStr = cached ? `  ${DIM}↑ cached${RESET}` : "";
     lines.push(
-      `${icon} ${badge} ${DIM}${filePath}${RESET} ${DIM}(${fileTotal} ${fileTotal === 1 ? "test" : "tests"})${RESET}${dur}`,
+      `${icon} ${badge} ${DIM}${filePath}${RESET} ${DIM}(${fileTotal} ${fileTotal === 1 ? "test" : "tests"})${RESET}${cached ? cachedStr : dur}`,
     );
 
     // Expand failures (and all tests in verbose) inline under the file line

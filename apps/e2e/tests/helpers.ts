@@ -27,6 +27,8 @@ export async function waitForTestsComplete(page: Page): Promise<void> {
   // 3. Wait for the progress toast to confirm tests have started
   await page.locator("text=Running tests").waitFor({ state: "visible", timeout: 15_000 });
 
-  // 4. Wait for the toast to disappear — all tests are done
-  await page.locator("text=Running tests").waitFor({ state: "hidden", timeout: 90_000 });
+  // 4. Wait for the toast to disappear — all tests are done.
+  // scheduler.yield() replaced rAF in the browser runner, eliminating the 1fps
+  // headless throttle. 35s is a generous bound for the example app's test suite.
+  await page.locator("text=Running tests").waitFor({ state: "hidden", timeout: 35_000 });
 }

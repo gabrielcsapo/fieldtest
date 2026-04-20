@@ -115,17 +115,28 @@ function fieldtestDevPlugin(options: { updateSnapshots?: boolean } = {}): Plugin
       );
     },
     configureServer(server) {
-      // Raw source endpoint — returns file content without Istanbul instrumentation
+      // Raw source endpoint — returns file content without Istanbul instrumentation.
+      // Accepts either:
+      //   ?path=/absolute/path/to/file.ts   (existing — used by CoverageExplorer / CodeTab)
+      //   ?url=/src/App.tsx                 (new — Vite-relative path, resolved via server root)
       server.middlewares.use("/__fieldtest_source__", async (req, res) => {
         try {
-          const url = new URL(req.url ?? "/", "http://localhost");
-          const filePath = url.searchParams.get("path");
-          if (!filePath || !filePath.startsWith("/")) {
+          const reqUrl = new URL(req.url ?? "/", "http://localhost");
+          const filePath = reqUrl.searchParams.get("path");
+          const viteUrl = reqUrl.searchParams.get("url");
+
+          let resolvedPath: string;
+          if (filePath && filePath.startsWith("/")) {
+            resolvedPath = filePath;
+          } else if (viteUrl && viteUrl.startsWith("/")) {
+            resolvedPath = join(root, viteUrl);
+          } else {
             res.writeHead(400);
             res.end("Bad Request");
             return;
           }
-          const content = await readFile(filePath, "utf8");
+
+          const content = await readFile(resolvedPath, "utf8");
           res.setHeader("Content-Type", "text/plain; charset=utf-8");
           res.end(content);
         } catch {

@@ -1,6 +1,6 @@
 ## registerAfterTestHook
 
-Run custom logic after every test completes. Useful for cleanup, logging, or attaching extra data to the test result.
+Run custom logic after **every** test in the project completes. Designed for use in `.fieldtest/setup.ts` — these hooks are global and apply across all test files.
 
 ```ts
 import { registerAfterTestHook, currentTest } from "@fieldtest/core";
@@ -17,7 +17,7 @@ registerAfterTestHook(async () => {
 
 The hook runs in the same environment as the test (browser or Node). In browser mode, you can access the DOM. In Node mode, `currentTest` still gives you full test metadata.
 
-### Other hooks
+### All global hooks
 
 ```ts
 import {
@@ -27,10 +27,10 @@ import {
   registerAfterDisplayHook,
 } from '@fieldtest/core'
 
-// Runs before each test
+// Runs before each test (all files)
 registerBeforeTestHook(async () => { ... })
 
-// Runs after each test
+// Runs after each test (all files)
 registerAfterTestHook(async () => { ... })
 
 // Runs before rendering in the browser UI (display mode only)
@@ -39,3 +39,7 @@ registerBeforeDisplayHook(async () => { ... })
 // Runs after rendering in the browser UI (display mode only)
 registerAfterDisplayHook(async () => { ... })
 ```
+
+### Suite-scoped hooks
+
+For setup and teardown that should only apply within a specific `describe` block, use the DSL hooks instead — `beforeAll`, `afterAll`, `beforeEach`, and `afterEach`. These are imported from `@fieldtest/core` and called directly inside a `describe`. See [describe / it / test](/docs/describe-it) for full documentation and examples.

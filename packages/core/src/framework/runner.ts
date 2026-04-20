@@ -1,5 +1,12 @@
 import { store, setCurrentTest } from "./store";
-import type { TestCase, TestSuite, IstanbulCoverage, ConsoleEntry, ConsoleLevel } from "./types";
+import type {
+  Hook,
+  TestCase,
+  TestSuite,
+  IstanbulCoverage,
+  ConsoleEntry,
+  ConsoleLevel,
+} from "./types";
 import { runBeforeTestHooks, runAfterTestHooks } from "./hooks";
 import { clearCallLog, getMockEntriesWithCalls } from "./mocks";
 
@@ -19,10 +26,15 @@ export function setCoverageProvider(p: CoverageProvider | null): void {
 
 const CONSOLE_LEVELS: ConsoleLevel[] = ["log", "warn", "error", "info", "debug"];
 
+// Capture the real console methods once at module load so interceptConsole doesn't
+// allocate a new bound function per call per test.
+const CONSOLE_ORIGINALS = {} as Record<ConsoleLevel, (...args: unknown[]) => void>;
+for (const level of CONSOLE_LEVELS) {
+  CONSOLE_ORIGINALS[level] = console[level].bind(console);
+}
+
 function interceptConsole(entries: ConsoleEntry[]): () => void {
-  const originals = {} as Record<ConsoleLevel, (...args: unknown[]) => void>;
   for (const level of CONSOLE_LEVELS) {
-    originals[level] = console[level].bind(console);
     console[level] = (...args: unknown[]) => {
       entries.push({
         level,
@@ -56,7 +68,7 @@ function interceptConsole(entries: ConsoleEntry[]): () => void {
     };
   }
   return () => {
-    for (const level of CONSOLE_LEVELS) console[level] = originals[level];
+    for (const level of CONSOLE_LEVELS) console[level] = CONSOLE_ORIGINALS[level];
   };
 }
 
@@ -68,12 +80,20 @@ async function getCleanup(): Promise<(() => void) | null> {
 }
 
 /**
- * Yield to the browser and wait for the next animation frame.
- * Using rAF (not setTimeout/scheduler.yield) ensures the browser actually
- * repaints the progress UI before we continue — critical for smooth toast updates.
+ * Yield to the browser event loop so the progress UI can update.
+ * Uses scheduler.yield() when available (Chrome 115+) — it cooperatively
+ * yields to the task queue without the ~1 fps throttle that headless Chrome
+ * applies to requestAnimationFrame, keeping CI runs fast while still allowing
+ * React to flush state updates between test batches.
  */
-function yieldToFrame(): Promise<void> {
-  return new Promise<void>((r) => requestAnimationFrame(() => r()));
+function yieldToEventLoop(): Promise<void> {
+  if (typeof (globalThis as Record<string, unknown>)["scheduler"] === "object") {
+    const scheduler = (globalThis as Record<string, { yield?: () => Promise<void> }>)["scheduler"];
+    if (typeof scheduler?.yield === "function") {
+      return scheduler.yield();
+    }
+  }
+  return new Promise<void>((r) => setTimeout(r, 0));
 }
 
 async function takeCoverageSnap(): Promise<unknown> {
@@ -107,21 +127,38 @@ function withTimeout<T>(promise: Promise<T>, ms: number, testName: string): Prom
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-async function execTest(test: TestCase, cleanup: (() => void) | null) {
+async function runHooks(hooks: Hook[], label: string) {
+  for (const fn of hooks) {
+    try {
+      await fn();
+    } catch (e) {
+      console.error(`[fieldtest] ${label} hook threw:`, e);
+    }
+  }
+}
+
+async function execTest(
+  test: TestCase,
+  cleanup: (() => void) | null,
+  suiteBeforeEach: Hook[] = [],
+  suiteAfterEach: Hook[] = [],
+) {
   store.updateTest(test.suiteId, test.id, { status: "running" });
   setCurrentTest(test);
   clearCallLog(); // fresh spy log for this test
   const sourceFile = store.getState().suites.find((s) => s.id === test.suiteId)?.sourceFile;
   const consoleLogs: ConsoleEntry[] = [];
   const restoreConsole = interceptConsole(consoleLogs);
+  const timeoutMs = test.timeout ?? _timeoutMs;
   // Outer try/finally guarantees restoreConsole, setCurrentTest, and afterEach hooks
   // always run — even if beforeEach hooks or coverage snapshotting throws.
   try {
     await runBeforeTestHooks();
+    await runHooks(suiteBeforeEach, `beforeEach (${test.suiteName} > ${test.name})`);
     const beforeSnap = await takeCoverageSnap();
     const t0 = Date.now();
     try {
-      await withTimeout(Promise.resolve(test.fn!()), _timeoutMs, test.name);
+      await withTimeout(Promise.resolve(test.fn!()), timeoutMs, test.name);
       const duration = Date.now() - t0;
       const testCoverage = await computeTestCoverage(beforeSnap);
       store.updateTest(test.suiteId, test.id, {
@@ -140,7 +177,7 @@ async function execTest(test: TestCase, cleanup: (() => void) | null) {
       const testCoverage = await computeTestCoverage(beforeSnap);
       store.updateTest(test.suiteId, test.id, {
         status: "fail",
-        error: e instanceof Error ? e.message : String(e),
+        error: e instanceof Error ? (e.stack ?? e.message) : String(e),
         snapshots: test.snapshots,
         assertions: test.assertions,
         consoleLogs,
@@ -160,8 +197,9 @@ async function execTest(test: TestCase, cleanup: (() => void) | null) {
     try {
       await runAfterTestHooks();
     } catch (e) {
-      console.error("[fieldtest] afterEach hook threw:", e);
+      console.error(`[fieldtest] afterEach hook threw in "${test.suiteName} > ${test.name}":`, e);
     }
+    await runHooks(suiteAfterEach, `afterEach (${test.suiteName} > ${test.name})`);
     cleanup?.();
   }
 }
@@ -177,6 +215,10 @@ async function execSuite(
   let allPass = true;
   let localDone = 0;
   const suiteT0 = Date.now();
+  const beforeEachFns = suite.beforeEachFns ?? [];
+  const afterEachFns = suite.afterEachFns ?? [];
+
+  await runHooks(suite.beforeAllFns ?? [], `beforeAll (${suite.name})`);
 
   // Yield at ~60 fps — only pause once per frame regardless of test speed
   let lastYield = Date.now();
@@ -195,7 +237,7 @@ async function execSuite(
       store.updateTest(test.suiteId, test.id, { status: "skipped" });
       continue;
     }
-    const passed = await execTest(test, cleanup);
+    const passed = await execTest(test, cleanup, beforeEachFns, afterEachFns);
     if (!passed) allPass = false;
     localDone++;
     onTestDone?.(doneOffset + localDone);
@@ -203,10 +245,12 @@ async function execSuite(
     // Yield to the browser every ~16ms so the progress UI stays smooth
     const now = Date.now();
     if (now - lastYield >= 16) {
-      await yieldToFrame();
+      await yieldToEventLoop();
       lastYield = Date.now();
     }
   }
+
+  await runHooks(suite.afterAllFns ?? [], `afterAll (${suite.name})`);
 
   store.updateSuite(suite.id, {
     status: allPass ? "pass" : "fail",

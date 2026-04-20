@@ -18,6 +18,60 @@ function stringify(v: unknown): string {
   }
 }
 
+/**
+ * Recursively walk `received` vs `expected` and collect lines like:
+ *   - path: <received value>   (what we got)
+ *   + path: <expected value>   (what was expected)
+ * For primitive mismatches the path is shown; for missing/extra keys the
+ * path is prefixed with "- extra:" / "+ missing:".
+ */
+function collectDiffLines(received: unknown, expected: unknown, path: string): string[] {
+  const receivedJson = JSON.stringify(received);
+  const expectedJson = JSON.stringify(expected);
+  if (receivedJson === expectedJson) return [];
+
+  const isPlainObj = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null && !Array.isArray(v);
+
+  if (isPlainObj(received) && isPlainObj(expected)) {
+    const keys = new Set([...Object.keys(received), ...Object.keys(expected)]);
+    const lines: string[] = [];
+    for (const key of keys) {
+      const childPath = path ? `${path}.${key}` : key;
+      if (!(key in expected)) {
+        lines.push(`  - extra   ${childPath}: ${stringify(received[key])}`);
+      } else if (!(key in received)) {
+        lines.push(`  + missing ${childPath}: ${stringify(expected[key])}`);
+      } else {
+        lines.push(...collectDiffLines(received[key], expected[key], childPath));
+      }
+    }
+    return lines;
+  }
+
+  if (Array.isArray(received) && Array.isArray(expected)) {
+    const len = Math.max(received.length, expected.length);
+    const lines: string[] = [];
+    for (let i = 0; i < len; i++) {
+      lines.push(...collectDiffLines(received[i], expected[i], `${path}[${i}]`));
+    }
+    return lines;
+  }
+
+  // Primitive or type mismatch
+  return [
+    `  - received ${path || "(value)"}: ${stringify(received)}`,
+    `  + expected ${path || "(value)"}: ${stringify(expected)}`,
+  ];
+}
+
+function deepDiffMessage(received: unknown, expected: unknown): string {
+  const lines = collectDiffLines(received, expected, "");
+  if (lines.length === 0)
+    return `Expected ${stringify(expected)} but received ${stringify(received)}`;
+  return `toEqual failed:\n${lines.join("\n")}`;
+}
+
 interface Matchers {
   toBe(expected: unknown): void;
   toEqual(expected: unknown): void;
@@ -108,7 +162,7 @@ function createMatchers(received: unknown, negated = false): Matchers {
     toEqual(expected) {
       assert(
         JSON.stringify(received) === JSON.stringify(expected),
-        `Expected ${stringify(expected)} but received ${stringify(received)}`,
+        deepDiffMessage(received, expected),
         `toEqual(${stringify(expected)})`,
       );
     },

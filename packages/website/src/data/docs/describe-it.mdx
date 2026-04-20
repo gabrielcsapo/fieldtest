@@ -59,21 +59,77 @@ describe('skipped suite', () => {
 })
 ```
 
+### describe.each
+
+```ts
+describe.each<T extends unknown[]>(cases: T[]): (
+  nameTemplate: string,
+  fn: (...args: T) => void
+) => void
+```
+
+Runs the same describe block for each row of inputs. Useful for running an entire suite of tests across multiple configurations (themes, locales, user roles, etc.).
+
+Use `%s`, `%d`, `%i`, or `%o` as placeholders in the name template.
+
+```ts
+describe.each([
+  ['light'],
+  ['dark'],
+])('Button — %s theme', async (theme) => {
+  it('renders without crashing', async () => {
+    const { getByRole } = await render(<Button theme={theme} label="Save" />)
+    expect(getByRole('button')).toBeTruthy()
+  })
+
+  it('shows the label', async () => {
+    const { getByText } = await render(<Button theme={theme} label="Save" />)
+    expect(getByText('Save')).toBeTruthy()
+  })
+})
+```
+
+This produces two separate suites — `Button — light theme` and `Button — dark theme` — each with the full set of tests.
+
 ---
 
 ## it / test
 
 ```ts
-function it(name: string, fn: () => void | Promise<void>): void;
-function test(name: string, fn: () => void | Promise<void>): void;
+function it(name: string, fn: () => void | Promise<void>, options?: TestOptions): void;
+function test(name: string, fn: () => void | Promise<void>, options?: TestOptions): void;
 ```
 
 `test` is an alias for `it` — they are identical. Use whichever reads better for your test.
 
+### TestOptions
+
+```ts
+interface TestOptions {
+  timeout?: number; // ms — overrides the global setTestTimeout() for this test only
+}
+```
+
+Pass a third argument to override the default timeout for a specific test:
+
+```ts
+it(
+  "waits for slow animation",
+  async () => {
+    // ...
+  },
+  { timeout: 10000 },
+);
+```
+
+### Duplicate name detection
+
+Registering two tests with the same name in the same suite will log a console warning and only the first definition will run. Rename the second test to fix it.
+
 ### it.only
 
 ```ts
-it.only(name: string, fn: () => void | Promise<void>): void
+it.only(name: string, fn: () => void | Promise<void>, options?: TestOptions): void
 ```
 
 Runs only this test within its suite. All other `it` / `test` calls in the same file are skipped.
@@ -145,3 +201,82 @@ it.each([
   expect(getByText(user.name)).toBeTruthy()
 })
 ```
+
+---
+
+## Lifecycle hooks
+
+Suite-scoped setup and teardown functions. Import from `@fieldtest/core` and call them **inside** a `describe` block.
+
+```ts
+import { describe, it, beforeAll, afterAll, beforeEach, afterEach } from "@fieldtest/core";
+```
+
+### beforeAll
+
+```ts
+beforeAll(fn: () => void | Promise<void>): void
+```
+
+Runs once before any test in the enclosing `describe` block. Use for expensive one-time setup (seeding a database, building a fixture, starting a server).
+
+### afterAll
+
+```ts
+afterAll(fn: () => void | Promise<void>): void
+```
+
+Runs once after all tests in the enclosing `describe` block have finished. Use for one-time teardown.
+
+### beforeEach
+
+```ts
+beforeEach(fn: () => void | Promise<void>): void
+```
+
+Runs before each individual test in the enclosing `describe` block. Runs after any global `registerBeforeTestHook` hooks.
+
+### afterEach
+
+```ts
+afterEach(fn: () => void | Promise<void>): void
+```
+
+Runs after each individual test in the enclosing `describe` block. Runs after any global `registerAfterTestHook` hooks.
+
+### Example
+
+```ts
+describe("UserService", () => {
+  let userId: string;
+
+  beforeAll(async () => {
+    userId = await db.createUser({ name: "Alice" });
+  });
+
+  afterAll(async () => {
+    await db.deleteUser(userId);
+  });
+
+  beforeEach(() => {
+    resetRequestMocks();
+  });
+
+  afterEach(() => {
+    clearLocalStorage();
+  });
+
+  it("fetches the user", async () => {
+    const user = await fetchUser(userId);
+    expect(user.name).toBe("Alice");
+  });
+
+  it("updates the user", async () => {
+    await updateUser(userId, { name: "Bob" });
+    const user = await fetchUser(userId);
+    expect(user.name).toBe("Bob");
+  });
+});
+```
+
+These hooks are scoped to their `describe` block. For file-level or global setup (e.g. starting MSW), use `registerBeforeTestHook` / `registerAfterTestHook` in `.fieldtest/setup.ts` instead — see [registerAfterTestHook](/docs/after-test-hook).

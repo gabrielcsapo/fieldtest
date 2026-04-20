@@ -7,7 +7,46 @@ on:
   pull_request:
 
 jobs:
-  test:
+  # Four node-test packages run in parallel — no build output needed since
+  # bin/fieldtest.js uses tsx to load TypeScript source directly.
+  node-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - filter: example
+            script: test:node
+          - filter: "@fieldtest/core"
+            script: test:node
+          - filter: "@fieldtest/runner"
+            script: test:node
+          - filter: scale
+            script: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test — ${{ matrix.filter }}
+        run: pnpm --filter "${{ matrix.filter }}" ${{ matrix.script }}
+
+  # Build verification runs in parallel with node-tests and e2e.
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -34,17 +73,28 @@ jobs:
       - name: Build runner
         run: pnpm --filter @fieldtest/runner build
 
-      - name: Test — example app
-        run: pnpm --filter example test:node
+  # E2E runs in parallel with node-tests and build. The fieldtest CLI uses tsx
+  # to load TypeScript source directly, so no pre-built dist is required.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Test — core package
-        run: pnpm --filter @fieldtest/core test:node
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
 
-      - name: Test — runner package
-        run: pnpm --filter @fieldtest/runner test:node
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
-      - name: Test — scale app
-        run: pnpm --filter scale test
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
         run: pnpm --filter e2e exec playwright install --with-deps chromium

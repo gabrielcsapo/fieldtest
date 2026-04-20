@@ -1,4 +1,5 @@
-export { describe, it, test } from "./dsl";
+export { describe, it, test, beforeAll, afterAll, beforeEach, afterEach } from "./dsl";
+export type { TestOptions } from "./dsl";
 export { expect } from "./expect";
 export { render, fireEvent, act } from "./render";
 export { store } from "./store";

@@ -175,7 +175,9 @@ function normalizeTag(tag: string): string {
 
 /** Normalize every opening tag in an HTML string. */
 function normalizeSnapshotHtml(html: string): string {
-  return html.replace(/<[a-zA-Z][^>]*>/g, (match) => {
+  // 1. Normalize opening tags: sort attributes, canonicalize style declarations.
+  //    Handles multi-line pretty-printed tags (e.g. `<div\n  style="…"\n>`).
+  let result = html.replace(/<[a-zA-Z][^>]*>/g, (match) => {
     if (match.startsWith("</") || match.startsWith("<!--")) return match;
     try {
       return normalizeTag(match);
@@ -183,6 +185,15 @@ function normalizeSnapshotHtml(html: string): string {
       return match;
     }
   });
+  // 2. Normalize multi-line closing tags produced by formatters (e.g. `</span\n>`).
+  result = result.replace(/<\/([^>]*?)>/g, (_, name) => `</${name.trim()}>`);
+  // 3. Trim leading/trailing whitespace from text content between tags so that
+  //    pretty-printed indented text ("  Alice Chen  ") matches compact text.
+  result = result.replace(/>([^<]*)</g, (_, text) => {
+    const trimmed = text.trim();
+    return trimmed ? `>${trimmed}<` : "><";
+  });
+  return result;
 }
 
 // ─── Wrapper stripping ────────────────────────────────────────────────────────
