@@ -343,8 +343,28 @@ function EdgeLines({
 }) {
   const importRef = useRef<THREE.LineSegments>(null);
   const covRef = useRef<THREE.LineSegments>(null);
+  const dashImportRef = useRef<THREE.LineSegments>(null);
+  const dashCovRef = useRef<THREE.LineSegments>(null);
 
-  const { importPos, importCol, covPos, covCol } = useMemo(() => {
+  // BFS to find all nodes transitively reachable from focusId (undirected)
+  const reachableIds = useMemo(() => {
+    if (!focusId) return new Set<string>();
+    const visited = new Set<string>([focusId]);
+    const queue = [focusId];
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      for (const e of edges) {
+        const neighbor = e.from === curr ? e.to : e.to === curr ? e.from : null;
+        if (neighbor && !visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+    }
+    return visited;
+  }, [focusId, edges]);
+
+  const { importPos, importCol, covPos, covCol, dashImportPos, dashCovPos } = useMemo(() => {
     const posMap = new Map<string, THREE.Vector3>();
     for (const n of nodes) posMap.set(n.id, new THREE.Vector3(n.x, n.y, n.z));
 
@@ -352,6 +372,8 @@ function EdgeLines({
       importCol: number[] = [];
     const covPos: number[] = [],
       covCol: number[] = [];
+    const dashImportPos: number[] = [];
+    const dashCovPos: number[] = [];
 
     const cImport = new THREE.Color("#374151");
     const cImportHi = new THREE.Color("#93c5fd");
@@ -362,16 +384,25 @@ function EdgeLines({
       const a = posMap.get(e.from),
         b = posMap.get(e.to);
       if (!a || !b) continue;
-      const isHi = focusId != null && (e.from === focusId || e.to === focusId);
-      const dim = focusId != null && !isHi;
 
-      if (e.type === "import") {
-        const c = isHi ? cImportHi : cImport;
+      const isDirect = focusId != null && (e.from === focusId || e.to === focusId);
+      const isIndirect =
+        focusId != null && !isDirect && reachableIds.has(e.from) && reachableIds.has(e.to);
+      const dim = focusId != null && !isDirect && !isIndirect;
+
+      if (isIndirect) {
+        if (e.type === "import") {
+          dashImportPos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        } else {
+          dashCovPos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+        }
+      } else if (e.type === "import") {
+        const c = isDirect ? cImportHi : cImport;
         const m = dim ? 0.15 : 1;
         importPos.push(a.x, a.y, a.z, b.x, b.y, b.z);
         importCol.push(c.r * m, c.g * m, c.b * m, c.r * m, c.g * m, c.b * m);
       } else {
-        const c = isHi ? cCovHi : cCov;
+        const c = isDirect ? cCovHi : cCov;
         const m = dim ? 0.15 : 1;
         covPos.push(a.x, a.y, a.z, b.x, b.y, b.z);
         covCol.push(c.r * m, c.g * m, c.b * m, c.r * m, c.g * m, c.b * m);
@@ -382,8 +413,10 @@ function EdgeLines({
       importCol: new Float32Array(importCol),
       covPos: new Float32Array(covPos),
       covCol: new Float32Array(covCol),
+      dashImportPos: new Float32Array(dashImportPos),
+      dashCovPos: new Float32Array(dashCovPos),
     };
-  }, [nodes, edges, focusId]);
+  }, [nodes, edges, focusId, reachableIds]);
 
   useLayoutEffect(() => {
     if (importRef.current) {
@@ -403,6 +436,24 @@ function EdgeLines({
     }
   }, [covPos, covCol]);
 
+  useLayoutEffect(() => {
+    if (dashImportRef.current) {
+      const g = dashImportRef.current.geometry;
+      g.setAttribute("position", new THREE.BufferAttribute(dashImportPos, 3));
+      g.computeBoundingSphere();
+      dashImportRef.current.computeLineDistances();
+    }
+  }, [dashImportPos]);
+
+  useLayoutEffect(() => {
+    if (dashCovRef.current) {
+      const g = dashCovRef.current.geometry;
+      g.setAttribute("position", new THREE.BufferAttribute(dashCovPos, 3));
+      g.computeBoundingSphere();
+      dashCovRef.current.computeLineDistances();
+    }
+  }, [dashCovPos]);
+
   return (
     <>
       <lineSegments ref={importRef}>
@@ -413,14 +464,35 @@ function EdgeLines({
         <bufferGeometry />
         <lineBasicMaterial vertexColors />
       </lineSegments>
+      <lineSegments ref={dashImportRef}>
+        <bufferGeometry />
+        <lineDashedMaterial
+          color="#93c5fd"
+          dashSize={0.5}
+          gapSize={0.3}
+          opacity={0.45}
+          transparent
+        />
+      </lineSegments>
+      <lineSegments ref={dashCovRef}>
+        <bufferGeometry />
+        <lineDashedMaterial
+          color="#a5b4fc"
+          dashSize={0.5}
+          gapSize={0.3}
+          opacity={0.45}
+          transparent
+        />
+      </lineSegments>
     </>
   );
 }
 
 // ─── Cluster bubble ───────────────────────────────────────────────────────────
 
-function ClusterBubble({ cluster }: { cluster: GCluster }) {
+function ClusterBubble({ cluster, visible }: { cluster: GCluster; visible: boolean }) {
   const color = new THREE.Color(cluster.color);
+  if (!visible) return null;
   return (
     <group position={[cluster.cx, cluster.cy, cluster.cz]}>
       <mesh>
@@ -540,19 +612,35 @@ function CameraInit({ layout }: { layout: LayoutResult }) {
 function Scene({
   layout,
   selectedId,
+  showSpheres,
   onSelect,
 }: {
   layout: LayoutResult;
   selectedId: string | null;
+  showSpheres: boolean;
   onSelect: (id: string | null) => void;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const focusId = selectedId ?? hoveredId;
 
-  const nodeColor = useCallback((n: GNode) => {
-    if (n.type === "suite") return suiteColor(n.passCount ?? 0, n.failCount ?? 0, n.testCount ?? 0);
-    return n.coveragePct != null ? coverageColor(n.coveragePct) : "#3b82f6";
-  }, []);
+  const connectedIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const e of layout.edges) {
+      ids.add(e.from);
+      ids.add(e.to);
+    }
+    return ids;
+  }, [layout.edges]);
+
+  const nodeColor = useCallback(
+    (n: GNode) => {
+      if (n.type === "suite")
+        return suiteColor(n.passCount ?? 0, n.failCount ?? 0, n.testCount ?? 0);
+      if (!connectedIds.has(n.id)) return "#5c4f7c";
+      return n.coveragePct != null ? coverageColor(n.coveragePct) : "#3b82f6";
+    },
+    [connectedIds],
+  );
 
   return (
     <>
@@ -563,7 +651,7 @@ function Scene({
 
       {/* Cluster bubbles */}
       {layout.clusters.map((c) => (
-        <ClusterBubble key={c.id} cluster={c} />
+        <ClusterBubble key={c.id} cluster={c} visible={showSpheres} />
       ))}
 
       {/* Cluster labels */}
@@ -962,6 +1050,7 @@ function Legend() {
             { color: "#f59e0b", label: "File — partial coverage" },
             { color: "#ef4444", label: "File — uncovered / failing suite" },
             { color: "#6366f1", label: "Test suite" },
+            { color: "#5c4f7c", label: "File — no connections" },
           ].map(({ color, label }) => (
             <div key={label} style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <div
@@ -992,6 +1081,21 @@ function Legend() {
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <div style={{ width: 16, height: 1, background: "#6366f1" }} /> Coverage edge
             </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <svg width="16" height="4" style={{ flexShrink: 0 }}>
+                <line
+                  x1="0"
+                  y1="2"
+                  x2="16"
+                  y2="2"
+                  stroke="#93c5fd"
+                  strokeWidth="1.5"
+                  strokeDasharray="3 2"
+                  opacity="0.6"
+                />
+              </svg>{" "}
+              Indirect edge
+            </div>
           </div>
         </div>
       )}
@@ -1011,6 +1115,7 @@ export function GraphView({ suites, coverage, onSelectSuite }: Props) {
   const { graphData, error } = useGraphData(suites, coverage);
   const layout = useLayout(graphData);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showSpheres, setShowSpheres] = useState(true);
 
   const selectedNode = useMemo(
     () => layout?.nodes.find((n) => n.id === selectedId) ?? null,
@@ -1062,10 +1167,43 @@ export function GraphView({ suites, coverage, onSelectSuite }: Props) {
         style={{ width: "100%", height: "100%" }}
         gl={{ antialias: true }}
       >
-        <Scene layout={layout} selectedId={selectedId} onSelect={setSelectedId} />
+        <Scene
+          layout={layout}
+          selectedId={selectedId}
+          showSpheres={showSpheres}
+          onSelect={setSelectedId}
+        />
       </Canvas>
 
       <Legend />
+
+      {/* Sphere toggle */}
+      <button
+        onClick={() => setShowSpheres((v) => !v)}
+        title={showSpheres ? "Hide spheres" : "Show spheres"}
+        style={{
+          position: "absolute",
+          top: 16,
+          right: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "6px 10px",
+          background: showSpheres ? "rgba(99,102,241,0.15)" : "rgba(22,22,29,0.85)",
+          backdropFilter: "blur(8px)",
+          border: `1px solid ${showSpheres ? "rgba(99,102,241,0.4)" : "#2a2a36"}`,
+          borderRadius: 8,
+          cursor: "pointer",
+          color: showSpheres ? "#818cf8" : "#6b7280",
+          fontSize: 11,
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.2" />
+          <circle cx="6" cy="6" r="2.5" fill="currentColor" opacity={showSpheres ? 1 : 0.3} />
+        </svg>
+        Spheres
+      </button>
 
       {selectedNode && layout && (
         <InfoPopover
