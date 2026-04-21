@@ -1,6 +1,6 @@
 {
   "name": "roadtest",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "bin": {
     "roadtest": "./bin/roadtest.js"
   },
