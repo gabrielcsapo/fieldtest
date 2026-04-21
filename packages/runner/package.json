@@ -1,16 +1,27 @@
 {
   "name": "@fieldtest/runner",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "bin": {
     "fieldtest": "./bin/fieldtest.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "src",
+    "!src/**/*.test.ts"
+  ],
   "type": "module",
   "exports": {
     "./bin/fieldtest.js": "./bin/fieldtest.js",
-    "./render": "./src/render.ts"
+    "./render": {
+      "development": "./src/render.ts",
+      "types": "./dist/render.d.ts",
+      "import": "./dist/render.js"
+    }
   },
   "scripts": {
-    "build": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc",
     "test:node": "node ./bin/fieldtest.js"
   },
   "dependencies": {

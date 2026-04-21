@@ -1,15 +1,23 @@
 {
   "name": "fieldtest",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "bin": {
     "fieldtest": "./bin/fieldtest.js"
   },
+  "files": [
+    "bin",
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "development": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
+  },
+  "scripts": {
+    "build": "tsc"
   },
   "dependencies": {
     "@fieldtest/core": "workspace:*",

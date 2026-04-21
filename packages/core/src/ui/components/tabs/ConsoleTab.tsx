@@ -5,7 +5,12 @@ const LEVEL_STYLES: Record<
   ConsoleEntry["level"],
   { color: string; bg: string; border: string; badge: string }
 > = {
-  log: { color: "#c4c4d4", bg: "transparent", border: "transparent", badge: "#4b4b60" },
+  log: {
+    color: "#c4c4d4",
+    bg: "transparent",
+    border: "transparent",
+    badge: "#4b4b60",
+  },
   info: {
     color: "#93c5fd",
     bg: "rgba(59,130,246,0.06)",
@@ -24,7 +29,12 @@ const LEVEL_STYLES: Record<
     border: "rgba(239,68,68,0.2)",
     badge: "#ef4444",
   },
-  debug: { color: "#6b7280", bg: "transparent", border: "transparent", badge: "#374151" },
+  debug: {
+    color: "#6b7280",
+    bg: "transparent",
+    border: "transparent",
+    badge: "#374151",
+  },
 };
 
 const LEVEL_ICON: Record<ConsoleEntry["level"], string> = {
@@ -174,7 +184,14 @@ function ConsoleArg({ arg }: { arg: string }) {
 export function ConsoleTab({ consoleLogs }: { consoleLogs: ConsoleEntry[] }) {
   if (consoleLogs.length === 0) {
     return (
-      <div style={{ padding: "32px 20px", textAlign: "center", color: "#4b4b60", fontSize: 13 }}>
+      <div
+        style={{
+          padding: "32px 20px",
+          textAlign: "center",
+          color: "#4b4b60",
+          fontSize: 13,
+        }}
+      >
         No console output
       </div>
     );
@@ -250,7 +267,6 @@ export function ConsoleTab({ consoleLogs }: { consoleLogs: ConsoleEntry[] }) {
                 hour: "2-digit",
                 minute: "2-digit",
                 second: "2-digit",
-                fractionalSecondDigits: 3,
               })}
               <br />+{entry.timestamp - t0}ms
             </span>

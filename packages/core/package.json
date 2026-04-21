@@ -1,14 +1,21 @@
 {
   "name": "@fieldtest/core",
-  "version": "0.1.0",
+  "version": "0.0.0",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "development": "./src/index.ts",
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/index.js"
     },
-    "./plugin": "./src/plugin.ts",
-    "./ui": "./src/ui/FieldtestDemo.tsx"
+    "./plugin": {
+      "development": "./src/plugin.ts",
+      "types": "./dist/src/plugin.d.ts",
+      "import": "./dist/plugin.js"
+    }
   },
   "scripts": {
     "build": "vite build",
@@ -34,6 +41,7 @@
     "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^6.0.2",
-    "vite": "^8.0.8"
+    "vite": "^8.0.8",
+    "vite-plugin-dts": "^4.5.4"
   }
 }

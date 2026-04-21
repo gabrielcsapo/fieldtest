@@ -149,7 +149,9 @@ export function setPlayDelay(ms: number) {
 /** Sentinel thrown by render() in display mode to stop further test execution */
 const DISPLAY_STOP = "__vtDisplayStop";
 
-export async function render(element: ReactElement) {
+export async function render(
+  element: ReactElement,
+): Promise<Awaited<ReturnType<typeof import("@testing-library/react").render>>> {
   const wrapped = _wrapper ? createElement(_wrapper, null, element) : element;
 
   const { render: tlRender } = await getTL();

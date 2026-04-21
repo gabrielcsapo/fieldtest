@@ -37,13 +37,19 @@ async function collectSourceFiles(dir: string, includeTests = false): Promise<st
 async function buildGraphData(
   root: string,
   includeTests = false,
-): Promise<{ nodes: { id: string; shortPath: string }[]; edges: { from: string; to: string }[] }> {
+): Promise<{
+  nodes: { id: string; shortPath: string }[];
+  edges: { from: string; to: string }[];
+}> {
   const srcDir = resolve(root, "src");
   await stat(srcDir);
   const allFiles = await collectSourceFiles(srcDir, includeTests);
   const fileSet = new Set(allFiles);
 
-  const nodes = allFiles.map((f) => ({ id: f, shortPath: f.replace(root + "/", "") }));
+  const nodes = allFiles.map((f) => ({
+    id: f,
+    shortPath: f.replace(root + "/", ""),
+  }));
   const edges: { from: string; to: string }[] = [];
 
   const importRe =
@@ -457,7 +463,10 @@ export async function buildUi() {
   // Write graph data as a static JSON file so the UI can load it without a dev server.
   // includeTests=true so the DepsTab can trace dep trees rooted at test files.
   const absOutDir = resolve(root, outDir);
-  const graphData = await buildGraphData(root, true).catch(() => ({ nodes: [], edges: [] }));
+  const graphData = await buildGraphData(root, true).catch(() => ({
+    nodes: [],
+    edges: [],
+  }));
   await writeFile(join(absOutDir, "fieldtest-graph.json"), JSON.stringify(graphData));
 
   // Write source file contents so CoverageExplorer can display source in static deployments.
@@ -477,7 +486,10 @@ export async function buildUi() {
   // Bundle snapshot baselines so the static site can load them without a dev server.
   // Keys are paths relative to the project root (e.g. "src/__snapshots__/Card/test__initial.html").
   const { glob } = await import("glob");
-  const snapshotFiles = await glob("src/__snapshots__/**/*.html", { cwd: root, absolute: true });
+  const snapshotFiles = await glob("src/__snapshots__/**/*.html", {
+    cwd: root,
+    absolute: true,
+  });
   const snapshotsMap: Record<string, string> = {};
   for (const f of snapshotFiles) {
     const key = relative(root, f);
