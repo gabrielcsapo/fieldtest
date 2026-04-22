@@ -16,7 +16,7 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
   return (
     <div className="relative">
       <svg
-        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ft-dim"
+        className="pointer-events-none absolute lert-3 top-1/2 -translate-y-1/2 text-rt-dim"
         width="14"
         height="14"
         viewBox="0 0 24 24"
@@ -34,12 +34,12 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search docs…"
-        className="w-full rounded-lg border border-white/7 bg-ft-bg py-2 pl-9 pr-3 font-sans text-sm text-ft-text placeholder:text-ft-dim focus:border-ft-green/50 focus:outline-none focus:ring-1 focus:ring-ft-green/30 transition-colors"
+        className="w-full rounded-lg border border-white/7 bg-rt-bg py-2 pl-9 pr-3 font-sans text-sm text-rt-text placeholder:text-rt-dim focus:border-rt-green/50 focus:outline-none focus:ring-1 focus:ring-rt-green/30 transition-colors"
       />
       {value && (
         <button
           onClick={() => onChange("")}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ft-dim hover:text-ft-mid transition-colors bg-transparent border-none cursor-pointer p-0"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-rt-dim hover:text-rt-mid transition-colors bg-transparent border-none cursor-pointer p-0"
         >
           <svg
             width="13"
@@ -64,7 +64,7 @@ function highlight(text: string, query: string): string {
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return text.replace(
     new RegExp(`(${escaped})`, "gi"),
-    '<mark class="bg-ft-gold/30 text-ft-gold-hi rounded px-0.5">$1</mark>',
+    '<mark class="bg-rt-gold/30 text-rt-gold-hi rounded px-0.5">$1</mark>',
   );
 }
 
@@ -81,7 +81,7 @@ function TableOfContents({
   if (headings.length === 0) return null;
   return (
     <div>
-      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-ft-dim">
+      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-rt-dim">
         On this page
       </div>
       <nav className="space-y-0.5">
@@ -93,8 +93,8 @@ function TableOfContents({
               h.level === 3 ? "pl-3 text-[11.5px]" : "pl-0 text-[12px]"
             } ${
               activeTocId === h.id
-                ? "text-ft-green-hi font-medium"
-                : "text-ft-dim hover:text-ft-mid"
+                ? "text-rt-green-hi font-medium"
+                : "text-rt-dim hover:text-rt-mid"
             }`}
           >
             {h.text}
@@ -112,7 +112,7 @@ function PrevNextNav({ prev, next }: { prev: DocEntry | null; next: DocEntry | n
       {prev ? (
         <Link
           to={`/docs/${prev.id}`}
-          className="group flex items-center gap-3 no-underline text-ft-mid hover:text-ft-text transition-colors min-w-0"
+          className="group flex items-center gap-3 no-underline text-rt-mid hover:text-rt-text transition-colors min-w-0"
         >
           <svg
             className="shrink-0"
@@ -128,8 +128,8 @@ function PrevNextNav({ prev, next }: { prev: DocEntry | null; next: DocEntry | n
             <path d="m15 18-6-6 6-6" />
           </svg>
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-wide text-ft-dim mb-0.5">Previous</div>
-            <div className="text-sm font-medium text-ft-text group-hover:text-ft-green-hi transition-colors truncate">
+            <div className="text-[11px] uppercase tracking-wide text-rt-dim mb-0.5">Previous</div>
+            <div className="text-sm font-medium text-rt-text group-hover:text-rt-green-hi transition-colors truncate">
               {prev.title}
             </div>
           </div>
@@ -140,11 +140,11 @@ function PrevNextNav({ prev, next }: { prev: DocEntry | null; next: DocEntry | n
       {next ? (
         <Link
           to={`/docs/${next.id}`}
-          className="group flex items-center gap-3 no-underline text-ft-mid hover:text-ft-text transition-colors text-right min-w-0"
+          className="group flex items-center gap-3 no-underline text-rt-mid hover:text-rt-text transition-colors text-right min-w-0"
         >
           <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-wide text-ft-dim mb-0.5">Next</div>
-            <div className="text-sm font-medium text-ft-text group-hover:text-ft-green-hi transition-colors truncate">
+            <div className="text-[11px] uppercase tracking-wide text-rt-dim mb-0.5">Next</div>
+            <div className="text-sm font-medium text-rt-text group-hover:text-rt-green-hi transition-colors truncate">
               {next.title}
             </div>
           </div>
@@ -259,7 +259,7 @@ export default function Docs() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-ft-bg font-sans text-ft-text">
+    <div className="flex min-h-screen flex-col bg-rt-bg font-sans text-rt-text">
       <Nav />
 
       <div className="mx-auto flex w-full max-w-[1100px] xl:max-w-[1340px] flex-1 gap-0 px-0">
@@ -273,7 +273,7 @@ export default function Docs() {
               if (items.length === 0) return null;
               return (
                 <div key={cat}>
-                  <div className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-ft-dim">
+                  <div className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-rt-dim">
                     {cat}
                   </div>
                   {items.map((doc) => (
@@ -282,8 +282,8 @@ export default function Docs() {
                       to={`/docs/${doc.id}`}
                       className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[13.5px] transition-colors no-underline ${
                         docId === doc.id
-                          ? "bg-ft-green/15 font-medium text-ft-green-hi"
-                          : "text-ft-mid hover:bg-white/5 hover:text-ft-text"
+                          ? "bg-rt-green/15 font-medium text-rt-green-hi"
+                          : "text-rt-mid hover:bg-white/5 hover:text-rt-text"
                       }`}
                     >
                       <span dangerouslySetInnerHTML={{ __html: highlight(doc.title, query) }} />
@@ -295,7 +295,7 @@ export default function Docs() {
           </nav>
 
           {filtered.length === 0 && (
-            <p className="mt-4 px-2 text-sm text-ft-dim">No results for "{query}"</p>
+            <p className="mt-4 px-2 text-sm text-rt-dim">No results for "{query}"</p>
           )}
         </aside>
 

@@ -596,7 +596,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-ft-bg font-sans text-ft-text">
+    <div className="min-h-screen bg-rt-bg font-sans text-rt-text">
       {/* Single persistent iframe — always fixed, repositioned by useLayoutEffect */}
       <iframe
         ref={iframeRef}
@@ -719,7 +719,7 @@ export default function Home() {
                   actually see.
                 </h1>
 
-                <p className="mb-8 text-[clamp(15px,2vw,17px)] leading-[1.7] text-ft-mid">
+                <p className="mb-8 text-[clamp(15px,2vw,17px)] leading-[1.7] text-rt-mid">
                   roadtest is a visual test runner for React. Watch your components render
                   step-by-step, inspect coverage per test, audit accessibility, and catch network
                   requests — all in the browser.
@@ -728,7 +728,7 @@ export default function Home() {
                 <div className="mb-7 flex flex-wrap gap-3">
                   <Link
                     to="/docs"
-                    className="flex items-center gap-2 rounded-xl bg-ft-green px-6 py-3 text-[15px] font-semibold text-white no-underline shadow-[0_0_24px_rgba(64,145,108,0.35)] transition-all hover:-translate-y-px hover:bg-ft-green-hi"
+                    className="flex items-center gap-2 rounded-xl bg-rt-green px-6 py-3 text-[15px] font-semibold text-white no-underline shadow-[0_0_24px_rgba(64,145,108,0.35)] transition-all hover:-translate-y-px hover:bg-rt-green-hi"
                   >
                     Get started
                     <svg
@@ -746,19 +746,19 @@ export default function Home() {
                   </Link>
                   <a
                     href="#features"
-                    className="flex items-center gap-2 rounded-xl border border-white/7 px-6 py-3 text-[15px] font-medium text-ft-mid no-underline transition-all hover:-translate-y-px hover:border-white/20 hover:text-ft-text"
+                    className="flex items-center gap-2 rounded-xl border border-white/7 px-6 py-3 text-[15px] font-medium text-rt-mid no-underline transition-all hover:-translate-y-px hover:border-white/20 hover:text-rt-text"
                   >
                     See features
                   </a>
                 </div>
 
                 {/* Install snippet */}
-                <div className="flex items-center gap-2.5 rounded-lg border border-white/7 bg-ft-surface px-4 py-2.5 font-mono text-sm text-ft-text w-fit">
-                  <span className="text-ft-green">$</span>
+                <div className="flex items-center gap-2.5 rounded-lg border border-white/7 bg-rt-surface px-4 py-2.5 font-mono text-sm text-rt-text w-fit">
+                  <span className="text-rt-green">$</span>
                   <span>npm install -D roadtest</span>
                   <button
                     onClick={copyInstall}
-                    className="cursor-pointer border-none bg-transparent p-0 text-ft-dim transition-colors hover:text-ft-text"
+                    className="cursor-pointer border-none bg-transparent p-0 text-rt-dim transition-colors hover:text-rt-text"
                     title="Copy"
                   >
                     <svg
@@ -784,15 +784,15 @@ export default function Home() {
         {/* Features */}
         <section id="features" className="px-6 py-24">
           <div className="mx-auto max-w-[1100px]">
-            <div className="mb-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-ft-green-hi">
+            <div className="mb-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-rt-green-hi">
               Features
             </div>
-            <h2 className="mb-4 text-[clamp(28px,4vw,42px)] font-extrabold leading-[1.15] tracking-tight text-ft-text">
+            <h2 className="mb-4 text-[clamp(28px,4vw,42px)] font-extrabold leading-[1.15] tracking-tight text-rt-text">
               Everything your tests
               <br />
               deserve to show you.
             </h2>
-            <p className="max-w-[540px] text-[17px] leading-[1.65] text-ft-mid">
+            <p className="max-w-[540px] text-[17px] leading-[1.65] text-rt-mid">
               Built for the way you actually debug — by looking, not guessing.
             </p>
 
@@ -804,23 +804,23 @@ export default function Home() {
                 {features.map((f, i) => (
                   <div
                     key={i}
-                    className={`p-9 transition-colors hover:bg-ft-surface ${
+                    className={`p-9 transition-colors hover:bg-rt-surface ${
                       i > 0 && i % 3 !== 0 ? "" : ""
                     } ${i >= 3 ? "border-t border-white/7 md:border-t-0 lg:border-t border-white/7" : ""}`}
                   >
                     <div
                       className={`mb-5 flex h-11 w-11 items-center justify-center rounded-xl border ${
                         f.color === "g"
-                          ? "border-ft-green/25 bg-ft-green/12 text-ft-green-hi"
-                          : "border-ft-gold/25 bg-ft-gold/12 text-ft-gold-hi"
+                          ? "border-rt-green/25 bg-rt-green/12 text-rt-green-hi"
+                          : "border-rt-gold/25 bg-rt-gold/12 text-rt-gold-hi"
                       }`}
                     >
                       {f.icon}
                     </div>
-                    <div className="mb-2.5 text-[16px] font-bold tracking-tight text-ft-text">
+                    <div className="mb-2.5 text-[16px] font-bold tracking-tight text-rt-text">
                       {f.title}
                     </div>
-                    <div className="text-sm leading-[1.65] text-ft-mid">{f.desc}</div>
+                    <div className="text-sm leading-[1.65] text-rt-mid">{f.desc}</div>
                   </div>
                 ))}
               </div>
@@ -829,24 +829,24 @@ export default function Home() {
         </section>
 
         {/* Code example */}
-        <section className="border-b border-t border-white/7 bg-ft-surface px-6 py-24">
+        <section className="border-b border-t border-white/7 bg-rt-surface px-6 py-24">
           <div className="mx-auto grid max-w-[1100px] grid-cols-1 items-center gap-16 lg:grid-cols-2">
             <div>
-              <div className="mb-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-ft-green-hi">
+              <div className="mb-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-rt-green-hi">
                 Familiar API
               </div>
-              <h2 className="mb-4 text-[clamp(28px,4vw,42px)] font-extrabold leading-[1.15] tracking-tight text-ft-text">
+              <h2 className="mb-4 text-[clamp(28px,4vw,42px)] font-extrabold leading-[1.15] tracking-tight text-rt-text">
                 If you know Jest,
                 <br />
                 you know roadtest.
               </h2>
-              <p className="mb-9 max-w-[480px] text-[17px] leading-[1.65] text-ft-mid">
+              <p className="mb-9 max-w-[480px] text-[17px] leading-[1.65] text-rt-mid">
                 Same{" "}
-                <code className="rounded border border-white/7 bg-ft-bg px-1.5 py-0.5 font-mono text-sm text-ft-green-hi">
+                <code className="rounded border border-white/7 bg-rt-bg px-1.5 py-0.5 font-mono text-sm text-rt-green-hi">
                   describe / it / expect
                 </code>{" "}
                 you already use. Add{" "}
-                <code className="rounded border border-white/7 bg-ft-bg px-1.5 py-0.5 font-mono text-sm text-ft-gold-hi">
+                <code className="rounded border border-white/7 bg-rt-bg px-1.5 py-0.5 font-mono text-sm text-rt-gold-hi">
                   snapshot()
                 </code>{" "}
                 where you want a visual checkpoint.
@@ -870,14 +870,14 @@ export default function Home() {
                   },
                 ].map((p) => (
                   <div key={p.n} className="flex gap-4">
-                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-ft-green/30 bg-ft-green/15 text-xs font-bold text-ft-green-hi">
+                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-rt-green/30 bg-rt-green/15 text-xs font-bold text-rt-green-hi">
                       {p.n}
                     </div>
                     <div>
-                      <strong className="block text-sm font-semibold text-ft-text">
+                      <strong className="block text-sm font-semibold text-rt-text">
                         {p.title}
                       </strong>
-                      <span className="text-sm text-ft-mid">{p.desc}</span>
+                      <span className="text-sm text-rt-mid">{p.desc}</span>
                     </div>
                   </div>
                 ))}
@@ -891,7 +891,7 @@ export default function Home() {
                   dangerouslySetInnerHTML={{ __html: codeHtml }}
                 />
               ) : (
-                <pre className="overflow-x-auto p-6 font-mono text-[13px] leading-[1.75] text-ft-mid">
+                <pre className="overflow-x-auto p-6 font-mono text-[13px] leading-[1.75] text-rt-mid">
                   <code>{BUTTON_TEST_CODE}</code>
                 </pre>
               )}
@@ -902,29 +902,29 @@ export default function Home() {
         {/* Dual mode */}
         <section className="px-6 py-24">
           <div className="mx-auto max-w-[1100px]">
-            <div className="mb-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-ft-green-hi">
+            <div className="mb-3.5 text-xs font-semibold uppercase tracking-[0.12em] text-rt-green-hi">
               Two modes, one test file
             </div>
-            <h2 className="mb-4 text-[clamp(28px,4vw,42px)] font-extrabold leading-[1.15] tracking-tight text-ft-text">
+            <h2 className="mb-4 text-[clamp(28px,4vw,42px)] font-extrabold leading-[1.15] tracking-tight text-rt-text">
               Browser for humans.
               <br />
               Node for machines.
             </h2>
-            <p className="mb-14 max-w-[540px] text-[17px] leading-[1.65] text-ft-mid">
+            <p className="mb-14 max-w-[540px] text-[17px] leading-[1.65] text-rt-mid">
               The exact same test file runs in both environments. No rewrites, no separate configs.
               Use the browser UI while you build, Node in CI.
             </p>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
               {/* Browser card */}
-              <div className="overflow-hidden rounded-2xl border border-white/7 bg-ft-surface">
+              <div className="overflow-hidden rounded-2xl border border-white/7 bg-rt-surface">
                 <div className="flex items-center gap-3 border-b border-white/7 px-6 py-5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-ft-green/25 bg-ft-green/12 text-ft-green-hi">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-rt-green/25 bg-rt-green/12 text-rt-green-hi">
                     <BrowserIcon />
                   </div>
                   <div>
-                    <div className="text-[15px] font-bold text-ft-text">Browser UI</div>
-                    <div className="font-mono text-xs text-ft-dim">roadtest --ui</div>
+                    <div className="text-[15px] font-bold text-rt-text">Browser UI</div>
+                    <div className="font-mono text-xs text-rt-dim">roadtest --ui</div>
                   </div>
                 </div>
                 {/* Fixed iframe — repositioned by useLayoutEffect */}
@@ -999,8 +999,8 @@ export default function Home() {
                     "Gallery view — all tests at a glance",
                     "Hot reload on file save",
                   ].map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-ft-mid">
-                      <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-ft-green-hi" />
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-rt-mid">
+                      <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-rt-green-hi" />
                       {f}
                     </li>
                   ))}
@@ -1008,14 +1008,14 @@ export default function Home() {
               </div>
 
               {/* Node card */}
-              <div className="overflow-hidden rounded-2xl border border-white/7 bg-ft-surface">
+              <div className="overflow-hidden rounded-2xl border border-white/7 bg-rt-surface">
                 <div className="flex items-center gap-3 border-b border-white/7 px-6 py-5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-ft-gold/25 bg-ft-gold/12 text-ft-gold-hi">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-rt-gold/25 bg-rt-gold/12 text-rt-gold-hi">
                     <NodeIcon />
                   </div>
                   <div>
-                    <div className="text-[15px] font-bold text-ft-text">Node / CI</div>
-                    <div className="font-mono text-xs text-ft-dim">
+                    <div className="text-[15px] font-bold text-rt-text">Node / CI</div>
+                    <div className="font-mono text-xs text-rt-dim">
                       roadtest --coverage --shard=1/4
                     </div>
                   </div>
@@ -1023,7 +1023,7 @@ export default function Home() {
                 <div className="m-6">
                   <TerminalWindow>
                     <pre
-                      className="p-4 font-mono text-[12px] leading-[1.7] text-ft-mid whitespace-pre-wrap"
+                      className="p-4 font-mono text-[12px] leading-[1.7] text-rt-mid whitespace-pre-wrap"
                       dangerouslySetInnerHTML={{ __html: ansiToHtml(TERMINAL_OUTPUT) }}
                     />
                   </TerminalWindow>
@@ -1034,8 +1034,8 @@ export default function Home() {
                     "Dependency-aware caching",
                     "Built-in sharding for parallel CI",
                   ].map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-ft-mid">
-                      <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-ft-gold-hi" />
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-rt-mid">
+                      <div className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-rt-gold-hi" />
                       {f}
                     </li>
                   ))}
@@ -1048,18 +1048,18 @@ export default function Home() {
         {/* CTA */}
         <section className="px-6 py-24 text-center">
           <div className="mx-auto max-w-[1100px]">
-            <h2 className="mb-4 text-[clamp(32px,5vw,52px)] font-black leading-[1.1] tracking-[-1.5px] text-ft-text">
+            <h2 className="mb-4 text-[clamp(32px,5vw,52px)] font-black leading-[1.1] tracking-[-1.5px] text-rt-text">
               Stop guessing.
               <br />
               Start seeing.
             </h2>
-            <p className="mx-auto mb-9 max-w-[460px] text-[17px] leading-relaxed text-ft-mid">
+            <p className="mx-auto mb-9 max-w-[460px] text-[17px] leading-relaxed text-rt-mid">
               roadtest is open source and free. Drop it into any Vite + React project in minutes.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3">
               <Link
                 to="/docs"
-                className="flex items-center gap-2 rounded-xl bg-ft-green px-6 py-3.5 text-[15px] font-semibold text-white no-underline shadow-[0_0_24px_rgba(64,145,108,0.35)] transition-all hover:-translate-y-px hover:bg-ft-green-hi"
+                className="flex items-center gap-2 rounded-xl bg-rt-green px-6 py-3.5 text-[15px] font-semibold text-white no-underline shadow-[0_0_24px_rgba(64,145,108,0.35)] transition-all hover:-translate-y-px hover:bg-rt-green-hi"
               >
                 Get started
                 <svg
@@ -1077,7 +1077,7 @@ export default function Home() {
               </Link>
               <a
                 href="https://github.com"
-                className="flex items-center gap-2 rounded-xl border border-white/7 px-6 py-3.5 text-[15px] font-medium text-ft-mid no-underline transition-all hover:-translate-y-px hover:border-white/20 hover:text-ft-text"
+                className="flex items-center gap-2 rounded-xl border border-white/7 px-6 py-3.5 text-[15px] font-medium text-rt-mid no-underline transition-all hover:-translate-y-px hover:border-white/20 hover:text-rt-text"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z" />
@@ -1091,11 +1091,11 @@ export default function Home() {
         {/* Footer */}
         <footer className="border-t border-white/7 py-8">
           <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-3 px-6">
-            <div className="flex items-center gap-2 text-sm font-bold text-ft-dim">
+            <div className="flex items-center gap-2 text-sm font-bold text-rt-dim">
               <Logo size={22} id="footer" />
               roadtest
             </div>
-            <div className="text-sm text-ft-dim">Open source. MIT license.</div>
+            <div className="text-sm text-rt-dim">Open source. MIT license.</div>
           </div>
         </footer>
       </div>

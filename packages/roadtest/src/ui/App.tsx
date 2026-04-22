@@ -411,18 +411,49 @@ function AppShell() {
             gap: 12,
           }}
         >
-          <span
-            style={{
-              fontWeight: 700,
-              fontSize: 14,
-              color: "#a5b4fc",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
-              marginRight: "auto",
-            }}
-          >
-            Roadtest
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginRight: "auto" }}>
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 200 200"
+              fill="none"
+              style={{ display: "block" }}
+              aria-hidden="true"
+            >
+              <defs>
+                <linearGradient id="rt-brand-asphalt" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#4a4a58" />
+                  <stop offset="100%" stopColor="#2a2a36" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M32 108 L82 160 L172 48"
+                stroke="url(#rt-brand-asphalt)"
+                strokeWidth="38"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <path
+                d="M32 108 L82 160 L172 48"
+                stroke="#e2a820"
+                strokeWidth="5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeDasharray="11 13"
+              />
+            </svg>
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: 14,
+                color: "#a5b4fc",
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
+            >
+              Roadtest
+            </span>
+          </div>
           <ViewToggle />
         </div>
         <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>

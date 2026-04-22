@@ -4,22 +4,22 @@
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --color-ft-bg: #070d0a;
-  --color-ft-surface: #0d1a12;
-  --color-ft-raised: #122018;
-  --color-ft-green: #40916c;
-  --color-ft-green-dim: #2d6a4f;
-  --color-ft-green-hi: #74c69d;
-  --color-ft-gold: #c9960f;
-  --color-ft-gold-hi: #e9b824;
-  --color-ft-text: #ddeee6;
-  --color-ft-mid: #a3c4b0;
-  --color-ft-dim: #6b8f7a;
-  --color-ft-fail: #e05252;
-  --color-ft-pass: #40916c;
+  --color-rt-bg: #070d0a;
+  --color-rt-surface: #0d1a12;
+  --color-rt-raised: #122018;
+  --color-rt-green: #40916c;
+  --color-rt-green-dim: #2d6a4f;
+  --color-rt-green-hi: #74c69d;
+  --color-rt-gold: #c9960f;
+  --color-rt-gold-hi: #e9b824;
+  --color-rt-text: #ddeee6;
+  --color-rt-mid: #a3c4b0;
+  --color-rt-dim: #6b8f7a;
+  --color-rt-fail: #e05252;
+  --color-rt-pass: #40916c;
 }
 
-@keyframes drift-1 {
+@keyframes drirt-1 {
   from {
     transform: translate(0, 0) scale(1);
   }
@@ -27,7 +27,7 @@
     transform: translate(40px, 28px) scale(1.08);
   }
 }
-@keyframes drift-2 {
+@keyframes drirt-2 {
   from {
     transform: translate(0, 0) scale(1);
   }
@@ -35,7 +35,7 @@
     transform: translate(-30px, 20px) scale(1.06);
   }
 }
-@keyframes drift-3 {
+@keyframes drirt-3 {
   from {
     transform: translate(0, 0) scale(1);
   }
@@ -45,14 +45,14 @@
 }
 
 .orb-1 {
-  animation: drift-1 20s ease-in-out infinite alternate;
+  animation: drirt-1 20s ease-in-out infinite alternate;
 }
 .orb-2 {
-  animation: drift-2 16s ease-in-out infinite alternate;
+  animation: drirt-2 16s ease-in-out infinite alternate;
   animation-delay: -8s;
 }
 .orb-3 {
-  animation: drift-3 24s ease-in-out infinite alternate;
+  animation: drirt-3 24s ease-in-out infinite alternate;
   animation-delay: -4s;
 }
 

@@ -21,6 +21,18 @@ interface RoadtestOptions {
 const VIRTUAL_ID = "virtual:roadtest-entry";
 const RESOLVED_ID = "\0" + VIRTUAL_ID;
 
+const FAVICON_SVG =
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200' fill='none'>` +
+  `<defs><linearGradient id='a' x1='0%' y1='0%' x2='100%' y2='100%'>` +
+  `<stop offset='0%' stop-color='%233a3a44'/><stop offset='100%' stop-color='%231c1c22'/>` +
+  `</linearGradient></defs>` +
+  `<path d='M32 108 L82 160 L172 48' stroke='url(%23a)' stroke-width='38' ` +
+  `stroke-linecap='round' stroke-linejoin='round'/>` +
+  `<path d='M32 108 L82 160 L172 48' stroke='%23e2a820' stroke-width='5' ` +
+  `stroke-linecap='round' stroke-linejoin='round' stroke-dasharray='11 13'/></svg>`;
+
+const FAVICON_DATA_URL = `data:image/svg+xml;utf8,${FAVICON_SVG}`;
+
 const PREVIEW_CANDIDATES = [
   ".roadtest/preview.tsx",
   ".roadtest/preview.ts",
@@ -1062,6 +1074,15 @@ export function roadtest(options: RoadtestOptions = {}): Plugin {
 
     transformIndexHtml: injectHtml
       ? () => [
+          {
+            tag: "link",
+            attrs: {
+              rel: "icon",
+              type: "image/svg+xml",
+              href: FAVICON_DATA_URL,
+            },
+            injectTo: "head",
+          },
           {
             tag: "script",
             attrs: { type: "module", src: `/@id/${VIRTUAL_ID}` },

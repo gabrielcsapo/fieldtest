@@ -176,7 +176,7 @@ export function TerminalWindow({ children, style, className }: TerminalWindowPro
         overflow: "hidden",
         borderRadius: 12,
         border: "1px solid rgba(255,255,255,0.07)",
-        background: "var(--color-ft-bg, #0f0f13)",
+        background: "var(--color-rt-bg, #0f0f13)",
         ...style,
       }}
     >
@@ -207,15 +207,15 @@ interface CodeWindowProps {
 export function CodeWindow({ filename, children, className }: CodeWindowProps) {
   return (
     <div
-      className={`overflow-hidden rounded-2xl border border-white/7 bg-ft-bg ${className ?? ""}`}
+      className={`overflow-hidden rounded-2xl border border-white/7 bg-rt-bg ${className ?? ""}`}
     >
-      <div className="flex items-center gap-2.5 border-b border-white/7 bg-ft-surface px-4 py-2.5">
+      <div className="flex items-center gap-2.5 border-b border-white/7 bg-rt-surface px-4 py-2.5">
         <div className="flex gap-1.5">
           {TRAFFIC_LIGHTS.map((c) => (
             <div key={c} className="h-[11px] w-[11px] rounded-full" style={{ background: c }} />
           ))}
         </div>
-        <span className="font-mono text-xs text-ft-dim">{filename}</span>
+        <span className="font-mono text-xs text-rt-dim">{filename}</span>
       </div>
       {children}
     </div>
